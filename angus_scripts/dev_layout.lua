@@ -10,32 +10,28 @@ local smallScreen = hsscreen.find("Built-in Retina Display") or hsscreen.primary
 -- Helper: open new iTerm window, move it, and run cmd
 ------------------------------------------------------
 local function newITermWindow(screen, frame, command)
-    hs.task.new("/usr/bin/osascript", nil, {
+    if not screen then return end
+
+    local screenFrame = screen:frame()
+    local x = math.floor(screenFrame.x + (frame.x * screenFrame.w))
+    local y = math.floor(screenFrame.y + (frame.y * screenFrame.h))
+    local w = math.floor(frame.w * screenFrame.w)
+    local h = math.floor(frame.h * screenFrame.h)
+
+    -- Use AppleScript to create window AND position it
+    hs.task.new("/usr/bin/osascript", function(exitCode, stdout, stderr)
+        -- AppleScript handles the positioning, so we're done
+    end, {
         "-e", 'tell application "iTerm"',
         "-e", 'create window with default profile',
-        "-e", 'tell current session of current window',
+        "-e", 'tell current window',
+        "-e", 'set bounds to {' .. x .. ', ' .. y .. ', ' .. (x + w) .. ', ' .. (y + h) .. '}',
+        "-e", 'tell current session',
         "-e", 'write text "' .. command .. '"',
+        "-e", 'end tell',
         "-e", 'end tell',
         "-e", 'end tell'
     }):start()
-
-    hs.timer.doAfter(1.0, function()
-        local app = hsapp.find("iTerm")
-        if app then
-            local win = app:mainWindow()
-            if win and screen then
-                local screenFrame = screen:frame()
-                local absoluteFrame = hsgeom.rect(
-                    screenFrame.x + (frame.x * screenFrame.w),
-                    screenFrame.y + (frame.y * screenFrame.h),
-                    frame.w * screenFrame.w,
-                    frame.h * screenFrame.h
-                )
-                win:moveToScreen(screen)
-                win:setFrame(absoluteFrame)
-            end
-        end
-    end)
 end
 
 ------------------------------------------------------
@@ -49,9 +45,9 @@ local function layoutTerminals()
         for c = 0, cols - 1 do
             idx = idx + 1
             local frame = {x = c / cols, y = r / rows, w = 1 / cols, h = 1 / rows}
-            hs.timer.doAfter(0.8 * idx, function()
-                newITermWindow(smallScreen, frame, "q")
-                -- newITermWindow(smallScreen, frame, "q && claude --permission-mode plan")
+            hs.timer.doAfter(0.5 * idx, function()
+                -- newITermWindow(smallScreen, frame, "q")
+                newITermWindow(smallScreen, frame, "q && claude --permission-mode plan")
             end)
         end
     end
@@ -62,7 +58,7 @@ local function layoutTerminals()
         {x = 0.75, y = 0.5, w = 0.25, h = 0.5},
     }
     for i, frame in ipairs(bigFrames) do
-        hs.timer.doAfter(0.8 * (idx + i), function()
+        hs.timer.doAfter(0.5 * (idx + i), function()
             newITermWindow(bigScreen, frame, "q")
         end)
     end
@@ -73,37 +69,36 @@ end
 -- VS Code positioning
 ------------------------------------------------------
 local function openVSCode()
+    if not bigScreen then return end
+
     local quickliPath = os.getenv("HOME") .. "/quickli/web"
+    local screenFrame = bigScreen:frame()
+    local x = math.floor(screenFrame.x)
+    local y = math.floor(screenFrame.y)
+    local w = math.floor(0.75 * screenFrame.w)
+    local h = math.floor(screenFrame.h)
+
     hs.task.new("/usr/local/bin/code", nil, {"--new-window", quickliPath}):start()
-    hs.timer.doAfter(1, function()
-        local app = hs.application.find("Visual Studio Code")
-        if app then
-            local win = app:mainWindow()
-            if win and bigScreen then
-                local screenFrame = bigScreen:frame()
-                local absoluteFrame = hsgeom.rect(
-                    screenFrame.x,
-                    screenFrame.y + (0.25 * screenFrame.h),
-                    0.75 * screenFrame.w,
-                    0.75 * screenFrame.h
-                )
-                win:moveToScreen(bigScreen)
-                win:setFrame(absoluteFrame)
+
+    -- Use Hammerspoon to position the window with "web" in title
+    hs.timer.doAfter(2, function()
+        local app = hsapp.find("Code")
+        if not app then return end
+
+        local targetWin = nil
+        for _, win in ipairs(app:allWindows()) do
+            local title = win:title() or ""
+            if string.find(title:lower(), "web") then
+                targetWin = win
+                break
             end
+        end
+
+        if targetWin then
+            targetWin:setFrame(hsgeom.rect(x, y, w, h))
         end
     end)
 end
-
--- local function openVSCode()
---     hs.application.launchOrFocus("Visual Studio Code")
---     hs.timer.doAfter(1, function()
---         local win = hsapp.find("Visual Studio Code"):mainWindow()
---         if win then
---             win:moveToScreen(bigScreen)
---             win:setFrame(hsgeom.rect(0, 0, 0.75, 1)) -- 3/4 width
---         end
---     end)
--- end
 
 ------------------------------------------------------
 -- Export module
@@ -111,6 +106,9 @@ end
 return {
     run = function()
         layoutTerminals()
-        openVSCode()
+        -- Wait for iTerm windows to finish (8 windows × 0.5s = 4s, plus buffer)
+        hs.timer.doAfter(5, function()
+            openVSCode()
+        end)
     end
 }
