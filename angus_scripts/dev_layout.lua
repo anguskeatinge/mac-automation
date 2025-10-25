@@ -112,7 +112,7 @@ return {
         end)
         -- Show completion message after everything is done
         hs.timer.doAfter(10, function()
-            hs.alert.show("Let's fucking go motherfuckers!", 3)
+            hs.alert.show("Let's Fucking Go!", 3)
         end)
     end
 }
