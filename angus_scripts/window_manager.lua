@@ -532,6 +532,9 @@ function M.bindHotkeys()
     -- Enter: Maximize
     hs.hotkey.bind(mash, "return", M.maximize)
 
+    -- Backtick: Maximize (alternative)
+    hs.hotkey.bind(mash, "`", M.maximize)
+
     -- Arrows: Smart navigation (basic, non-cycling up/down)
     hs.hotkey.bind(mash, "right", M.smartRight)
     hs.hotkey.bind(mash, "left", M.smartLeft)
