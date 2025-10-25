@@ -7,7 +7,10 @@ hs.alert.show("Hammerspoon config reloaded")
 
 -- import layouts
 local devLayout = require("angus_scripts.dev_layout")
--- you could later add: local designLayout = require("windows.layout_design")
+local windowManager = require("angus_scripts.window_manager")
 
 -- hotkeys
 hs.hotkey.bind({"cmd", "alt", "ctrl"}, "T", devLayout.run)
+
+-- initialize window manager
+windowManager.bindHotkeys()
