@@ -254,7 +254,7 @@ function M.wasdUp()
     local w = getWidthRatio(win, screen)
     local h = getHeightRatio(win, screen)
 
-    -- Cycle through heights at top position: 1/2 -> 1/3 -> 2/3 -> 1/2
+    -- Cycle through heights at top position: 1/2 -> 1/3 -> 2/3 -> full -> 1/2
     if frameMatches(win, screen, x, 0, w, 0.5) then
         -- At top half -> cycle to top third
         positionWindow(win, screen, x, 0, w, 1/3)
@@ -262,7 +262,10 @@ function M.wasdUp()
         -- At top third -> cycle to top 2/3
         positionWindow(win, screen, x, 0, w, 2/3)
     elseif frameMatches(win, screen, x, 0, w, 2/3) then
-        -- At top 2/3 -> cycle back to top half
+        -- At top 2/3 -> cycle to full height
+        positionWindow(win, screen, x, 0, w, 1)
+    elseif frameMatches(win, screen, x, 0, w, 1) then
+        -- At full height -> cycle back to top half
         positionWindow(win, screen, x, 0, w, 0.5)
     -- Check if at middle (y=1/3, height=1/3)
     elseif frameMatches(win, screen, x, 1/3, w, 1/3) then
@@ -293,7 +296,7 @@ function M.wasdDown()
     local w = getWidthRatio(win, screen)
     local h = getHeightRatio(win, screen)
 
-    -- Cycle through heights at bottom position: 1/2 -> 1/3 -> 2/3 -> 1/2
+    -- Cycle through heights at bottom position: 1/2 -> 1/3 -> 2/3 -> full -> 1/2
     if frameMatches(win, screen, x, 0.5, w, 0.5) then
         -- At bottom half -> cycle to bottom third
         positionWindow(win, screen, x, 2/3, w, 1/3)
@@ -301,7 +304,10 @@ function M.wasdDown()
         -- At bottom third -> cycle to bottom 2/3
         positionWindow(win, screen, x, 1/3, w, 2/3)
     elseif frameMatches(win, screen, x, 1/3, w, 2/3) then
-        -- At bottom 2/3 -> cycle back to bottom half
+        -- At bottom 2/3 -> cycle to full height
+        positionWindow(win, screen, x, 0, w, 1)
+    elseif frameMatches(win, screen, x, 0, w, 1) then
+        -- At full height -> cycle back to bottom half
         positionWindow(win, screen, x, 0.5, w, 0.5)
     -- Check if at middle (y=1/3, height=1/3)
     elseif frameMatches(win, screen, x, 1/3, w, 1/3) then
@@ -336,7 +342,7 @@ function M.wasdLeft()
 
     -- Check if already at left edge (x ≈ 0)
     if math.abs(x) < 0.01 then
-        -- Already on left side, cycle through widths: 1/2 -> 1/3 -> 1/4 -> 3/4 -> 2/3 -> 1/2
+        -- Already on left side, cycle through widths: 1/2 -> 1/3 -> 1/4 -> 3/4 -> 2/3 -> full -> 1/2
         if frameMatches(win, screen, 0, y, 0.5, h) then
             -- At 1/2 -> go to 1/3
             positionWindow(win, screen, 0, y, 1/3, h)
@@ -350,7 +356,10 @@ function M.wasdLeft()
             -- At 3/4 -> go to 2/3
             positionWindow(win, screen, 0, y, 2/3, h)
         elseif frameMatches(win, screen, 0, y, 2/3, h) then
-            -- At 2/3 -> go to 1/2
+            -- At 2/3 -> go to full width
+            positionWindow(win, screen, 0, y, 1, h)
+        elseif frameMatches(win, screen, 0, y, 1, h) then
+            -- At full width -> cycle back to 1/2
             positionWindow(win, screen, 0, y, 0.5, h)
         else
             -- Any other width -> start with 1/2
@@ -385,7 +394,7 @@ function M.wasdRight()
 
     -- Check if already at right edge (x ≈ 1 - w)
     if math.abs(x - (1 - w)) < 0.01 then
-        -- Already on right side, cycle through widths: 1/2 -> 1/3 -> 1/4 -> 3/4 -> 2/3 -> 1/2
+        -- Already on right side, cycle through widths: 1/2 -> 1/3 -> 1/4 -> 3/4 -> 2/3 -> full -> 1/2
         if frameMatches(win, screen, 0.5, y, 0.5, h) then
             -- At 1/2 -> go to 1/3
             positionWindow(win, screen, 2/3, y, 1/3, h)
@@ -399,7 +408,10 @@ function M.wasdRight()
             -- At 3/4 -> go to 2/3
             positionWindow(win, screen, 1/3, y, 2/3, h)
         elseif frameMatches(win, screen, 1/3, y, 2/3, h) then
-            -- At 2/3 -> go to 1/2
+            -- At 2/3 -> go to full width
+            positionWindow(win, screen, 0, y, 1, h)
+        elseif frameMatches(win, screen, 0, y, 1, h) then
+            -- At full width -> cycle back to 1/2
             positionWindow(win, screen, 0.5, y, 0.5, h)
         else
             -- Any other width -> start with 1/2
