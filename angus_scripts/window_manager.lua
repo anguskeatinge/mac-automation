@@ -51,14 +51,38 @@ local function frameMatches(win, screen, x, y, w, h, tolerance)
 end
 
 ------------------------------------------------------
+-- Helper functions for position detection (must be before cycleHorizontal)
+------------------------------------------------------
+
+-- Helper to get current width ratio
+local function getWidthRatio(win, screen)
+    local winFrame = win:frame()
+    local screenFrame = screen:frame()
+    return winFrame.w / screenFrame.w
+end
+
+------------------------------------------------------
 -- Cycling width functions (Cmd+Opt+1 through 5)
 ------------------------------------------------------
 
--- Generic cycling function for horizontal positioning
+-- Generic cycling function with right-side width preservation
 local function cycleHorizontal(width, positions)
     local win, screen = getFocusedWindowAndScreen()
     if not win or not screen then return end
 
+    local x = (win:frame().x - screen:frame().x) / screen:frame().w
+    local w = getWidthRatio(win, screen)
+    local rightEdge = 1 - width
+
+    -- Special case: on right side with DIFFERENT width -> stay right with new width
+    -- Check if currently right-aligned (x ≈ 1 - current_width) and different target width
+    -- BUT exclude full width windows (treat those as left-aligned)
+    if math.abs(x - (1 - w)) < 0.01 and math.abs(w - width) > 0.01 and math.abs(w - 1) > 0.01 then
+        positionWindow(win, screen, rightEdge, 0, width, 1)
+        return
+    end
+
+    -- Normal cycling logic (original behavior)
     -- Find current position in the cycle
     for i, pos in ipairs(positions) do
         if frameMatches(win, screen, pos.x, 0, width, 1) then
@@ -69,7 +93,7 @@ local function cycleHorizontal(width, positions)
         end
     end
 
-    -- Not in any known position, start with first position
+    -- Not in any known position, start with first position (left)
     positionWindow(win, screen, positions[1].x, 0, width, 1)
 end
 
@@ -99,7 +123,7 @@ function M.oneQuarterWidth()
 end
 
 ------------------------------------------------------
--- Helper functions for position detection
+-- Additional helper functions for arrow navigation
 ------------------------------------------------------
 
 -- Helper to get normalized x position
@@ -107,13 +131,6 @@ local function getNormalizedX(win, screen)
     local winFrame = win:frame()
     local screenFrame = screen:frame()
     return (winFrame.x - screenFrame.x) / screenFrame.w
-end
-
--- Helper to get current width ratio
-local function getWidthRatio(win, screen)
-    local winFrame = win:frame()
-    local screenFrame = screen:frame()
-    return winFrame.w / screenFrame.w
 end
 
 -- Helper to get current height ratio
@@ -127,49 +144,45 @@ end
 -- Smart arrow navigation
 ------------------------------------------------------
 
--- Right arrow: Three-step cycle: move right (keep height) -> full height right -> next screen left
+-- Right arrow: Progressive - right half (keep height) -> full height -> next screen
 function M.smartRight()
     local win, screen = getFocusedWindowAndScreen()
     if not win or not screen then return end
 
-    local w = getWidthRatio(win, screen)
     local h = getHeightRatio(win, screen)
-    local x = getNormalizedX(win, screen)
+    local y = (win:frame().y - screen:frame().y) / screen:frame().h
 
-    -- Step 3: If on right side full height -> move to next screen left side
-    if frameMatches(win, screen, 1 - w, 0, w, 1) then
+    -- Step 3: If at right half with full height -> move to next screen left half
+    if frameMatches(win, screen, 0.5, 0, 0.5, 1) then
         local nextScreen = screen:next()
-        positionWindow(win, nextScreen, 0, 0, w, 1)
-    -- Step 2: If on right side but not full height -> make full height
-    elseif math.abs(x - (1 - w)) < 0.01 then
-        positionWindow(win, screen, 1 - w, 0, w, 1)
-    -- Step 1: Any other position -> move to right side, keep height
+        positionWindow(win, nextScreen, 0, 0, 0.5, 1)
+    -- Step 2: If at right half but not full height -> make full height
+    elseif frameMatches(win, screen, 0.5, y, 0.5, h) then
+        positionWindow(win, screen, 0.5, 0, 0.5, 1)
+    -- Step 1: Any other position -> move to right half, keep current height
     else
-        local y = (win:frame().y - screen:frame().y) / screen:frame().h
-        positionWindow(win, screen, 1 - w, y, w, h)
+        positionWindow(win, screen, 0.5, y, 0.5, h)
     end
 end
 
--- Left arrow: Three-step cycle: move left (keep height) -> full height left -> previous screen right
+-- Left arrow: Progressive - left half (keep height) -> full height -> previous screen
 function M.smartLeft()
     local win, screen = getFocusedWindowAndScreen()
     if not win or not screen then return end
 
-    local w = getWidthRatio(win, screen)
     local h = getHeightRatio(win, screen)
-    local x = getNormalizedX(win, screen)
+    local y = (win:frame().y - screen:frame().y) / screen:frame().h
 
-    -- Step 3: If on left side full height -> move to previous screen right side
-    if frameMatches(win, screen, 0, 0, w, 1) then
+    -- Step 3: If at left half with full height -> move to previous screen right half
+    if frameMatches(win, screen, 0, 0, 0.5, 1) then
         local prevScreen = screen:previous()
-        positionWindow(win, prevScreen, 1 - w, 0, w, 1)
-    -- Step 2: If on left side but not full height -> make full height
-    elseif math.abs(x) < 0.01 then
-        positionWindow(win, screen, 0, 0, w, 1)
-    -- Step 1: Any other position -> move to left side, keep height
+        positionWindow(win, prevScreen, 0.5, 0, 0.5, 1)
+    -- Step 2: If at left half but not full height -> make full height
+    elseif frameMatches(win, screen, 0, y, 0.5, h) then
+        positionWindow(win, screen, 0, 0, 0.5, 1)
+    -- Step 1: Any other position -> move to left half, keep current height
     else
-        local y = (win:frame().y - screen:frame().y) / screen:frame().h
-        positionWindow(win, screen, 0, y, w, h)
+        positionWindow(win, screen, 0, y, 0.5, h)
     end
 end
 
@@ -177,7 +190,7 @@ end
 -- Vertical cycling with width preservation
 ------------------------------------------------------
 
--- Up arrow: Move up (non-cycling, idempotent at top)
+-- Up arrow: Move up, second press makes full width
 function M.smartUp()
     local win, screen = getFocusedWindowAndScreen()
     if not win or not screen then return end
@@ -186,11 +199,17 @@ function M.smartUp()
     local w = getWidthRatio(win, screen)
     local h = getHeightRatio(win, screen)
 
-    -- Already at top positions - do nothing (idempotent)
-    if frameMatches(win, screen, x, 0, w, 0.5) or
-       frameMatches(win, screen, x, 0, w, 1/3) or
-       frameMatches(win, screen, x, 0, w, 2/3) then
+    -- Already at top and full width - do nothing (idempotent)
+    if frameMatches(win, screen, 0, 0, 1, 1) or
+       frameMatches(win, screen, 0, 0, 1, 0.5) or
+       frameMatches(win, screen, 0, 0, 1, 1/3) or
+       frameMatches(win, screen, 0, 0, 1, 2/3) then
         return
+    -- At top but not full width - make full width
+    elseif frameMatches(win, screen, x, 0, w, 0.5) or
+           frameMatches(win, screen, x, 0, w, 1/3) or
+           frameMatches(win, screen, x, 0, w, 2/3) then
+        positionWindow(win, screen, 0, 0, 1, h)
     -- At middle third -> jump to top third
     elseif frameMatches(win, screen, x, 1/3, w, 1/3) then
         positionWindow(win, screen, x, 0, w, 1/3)
@@ -209,7 +228,7 @@ function M.smartUp()
     end
 end
 
--- Down arrow: Move down (non-cycling, idempotent at bottom)
+-- Down arrow: Move down, second press makes full width
 function M.smartDown()
     local win, screen = getFocusedWindowAndScreen()
     if not win or not screen then return end
@@ -218,11 +237,19 @@ function M.smartDown()
     local w = getWidthRatio(win, screen)
     local h = getHeightRatio(win, screen)
 
-    -- Already at bottom positions - do nothing (idempotent)
-    if frameMatches(win, screen, x, 0.5, w, 0.5) or
-       frameMatches(win, screen, x, 2/3, w, 1/3) or
-       frameMatches(win, screen, x, 1/3, w, 2/3) then
+    -- Already at bottom and full width - do nothing (idempotent)
+    if frameMatches(win, screen, 0, 0, 1, 1) or
+       frameMatches(win, screen, 0, 0.5, 1, 0.5) or
+       frameMatches(win, screen, 0, 2/3, 1, 1/3) or
+       frameMatches(win, screen, 0, 1/3, 1, 2/3) then
         return
+    -- At bottom but not full width - make full width, keep y position
+    elseif frameMatches(win, screen, x, 0.5, w, 0.5) then
+        positionWindow(win, screen, 0, 0.5, 1, 0.5)
+    elseif frameMatches(win, screen, x, 2/3, w, 1/3) then
+        positionWindow(win, screen, 0, 2/3, 1, 1/3)
+    elseif frameMatches(win, screen, x, 1/3, w, 2/3) then
+        positionWindow(win, screen, 0, 1/3, 1, 2/3)
     -- At middle third -> jump to bottom third
     elseif frameMatches(win, screen, x, 1/3, w, 1/3) then
         positionWindow(win, screen, x, 2/3, w, 1/3)
@@ -254,19 +281,19 @@ function M.wasdUp()
     local w = getWidthRatio(win, screen)
     local h = getHeightRatio(win, screen)
 
-    -- Cycle through heights at top position: 1/2 -> 1/3 -> 2/3 -> full -> 1/2
-    if frameMatches(win, screen, x, 0, w, 0.5) then
-        -- At top half -> cycle to top third
-        positionWindow(win, screen, x, 0, w, 1/3)
-    elseif frameMatches(win, screen, x, 0, w, 1/3) then
-        -- At top third -> cycle to top 2/3
+    -- Cycle through heights at top: full -> 2/3 -> 1/2 -> 1/3 -> full -> ...
+    if frameMatches(win, screen, x, 0, w, 1) then
+        -- At full height -> go to 2/3
         positionWindow(win, screen, x, 0, w, 2/3)
     elseif frameMatches(win, screen, x, 0, w, 2/3) then
-        -- At top 2/3 -> cycle to full height
-        positionWindow(win, screen, x, 0, w, 1)
-    elseif frameMatches(win, screen, x, 0, w, 1) then
-        -- At full height -> cycle back to top half
+        -- At 2/3 -> go to 1/2
         positionWindow(win, screen, x, 0, w, 0.5)
+    elseif frameMatches(win, screen, x, 0, w, 0.5) then
+        -- At 1/2 -> go to 1/3
+        positionWindow(win, screen, x, 0, w, 1/3)
+    elseif frameMatches(win, screen, x, 0, w, 1/3) then
+        -- At 1/3 -> cycle back to full height
+        positionWindow(win, screen, x, 0, w, 1)
     -- Check if at middle (y=1/3, height=1/3)
     elseif frameMatches(win, screen, x, 1/3, w, 1/3) then
         -- At middle third -> jump to top third
@@ -296,19 +323,19 @@ function M.wasdDown()
     local w = getWidthRatio(win, screen)
     local h = getHeightRatio(win, screen)
 
-    -- Cycle through heights at bottom position: 1/2 -> 1/3 -> 2/3 -> full -> 1/2
-    if frameMatches(win, screen, x, 0.5, w, 0.5) then
-        -- At bottom half -> cycle to bottom third
-        positionWindow(win, screen, x, 2/3, w, 1/3)
-    elseif frameMatches(win, screen, x, 2/3, w, 1/3) then
-        -- At bottom third -> cycle to bottom 2/3
+    -- Cycle through heights at bottom: full -> 2/3 -> 1/2 -> 1/3 -> full -> ...
+    if frameMatches(win, screen, x, 0, w, 1) then
+        -- At full height -> go to 2/3
         positionWindow(win, screen, x, 1/3, w, 2/3)
     elseif frameMatches(win, screen, x, 1/3, w, 2/3) then
-        -- At bottom 2/3 -> cycle to full height
-        positionWindow(win, screen, x, 0, w, 1)
-    elseif frameMatches(win, screen, x, 0, w, 1) then
-        -- At full height -> cycle back to bottom half
+        -- At 2/3 -> go to 1/2
         positionWindow(win, screen, x, 0.5, w, 0.5)
+    elseif frameMatches(win, screen, x, 0.5, w, 0.5) then
+        -- At 1/2 -> go to bottom 1/3
+        positionWindow(win, screen, x, 2/3, w, 1/3)
+    elseif frameMatches(win, screen, x, 2/3, w, 1/3) then
+        -- At bottom 1/3 -> cycle back to full height
+        positionWindow(win, screen, x, 0, w, 1)
     -- Check if at middle (y=1/3, height=1/3)
     elseif frameMatches(win, screen, x, 1/3, w, 1/3) then
         -- At middle third -> jump to bottom third
@@ -342,28 +369,28 @@ function M.wasdLeft()
 
     -- Check if already at left edge (x ≈ 0)
     if math.abs(x) < 0.01 then
-        -- Already on left side, cycle through widths: 1/2 -> 1/3 -> 1/4 -> 3/4 -> 2/3 -> full -> 1/2
-        if frameMatches(win, screen, 0, y, 0.5, h) then
+        -- Already on left side, cycle through widths: full -> 3/4 -> 2/3 -> 1/2 -> 1/3 -> 1/4 -> full -> ...
+        if frameMatches(win, screen, 0, y, 1, h) then
+            -- At full width -> go to 3/4
+            positionWindow(win, screen, 0, y, 0.75, h)
+        elseif frameMatches(win, screen, 0, y, 0.75, h) then
+            -- At 3/4 -> go to 2/3
+            positionWindow(win, screen, 0, y, 2/3, h)
+        elseif frameMatches(win, screen, 0, y, 2/3, h) then
+            -- At 2/3 -> go to 1/2
+            positionWindow(win, screen, 0, y, 0.5, h)
+        elseif frameMatches(win, screen, 0, y, 0.5, h) then
             -- At 1/2 -> go to 1/3
             positionWindow(win, screen, 0, y, 1/3, h)
         elseif frameMatches(win, screen, 0, y, 1/3, h) then
             -- At 1/3 -> go to 1/4
             positionWindow(win, screen, 0, y, 0.25, h)
         elseif frameMatches(win, screen, 0, y, 0.25, h) then
-            -- At 1/4 -> go to 3/4
-            positionWindow(win, screen, 0, y, 0.75, h)
-        elseif frameMatches(win, screen, 0, y, 0.75, h) then
-            -- At 3/4 -> go to 2/3
-            positionWindow(win, screen, 0, y, 2/3, h)
-        elseif frameMatches(win, screen, 0, y, 2/3, h) then
-            -- At 2/3 -> go to full width
+            -- At 1/4 -> cycle back to full width
             positionWindow(win, screen, 0, y, 1, h)
-        elseif frameMatches(win, screen, 0, y, 1, h) then
-            -- At full width -> cycle back to 1/2
-            positionWindow(win, screen, 0, y, 0.5, h)
         else
-            -- Any other width -> start with 1/2
-            positionWindow(win, screen, 0, y, 0.5, h)
+            -- Any other width -> start with full
+            positionWindow(win, screen, 0, y, 1, h)
         end
     -- Not at left edge - move left based on width
     elseif w >= 0.5 then
@@ -394,28 +421,28 @@ function M.wasdRight()
 
     -- Check if already at right edge (x ≈ 1 - w)
     if math.abs(x - (1 - w)) < 0.01 then
-        -- Already on right side, cycle through widths: 1/2 -> 1/3 -> 1/4 -> 3/4 -> 2/3 -> full -> 1/2
-        if frameMatches(win, screen, 0.5, y, 0.5, h) then
+        -- Already on right side, cycle through widths: full -> 3/4 -> 2/3 -> 1/2 -> 1/3 -> 1/4 -> full -> ...
+        if frameMatches(win, screen, 0, y, 1, h) then
+            -- At full width -> go to 3/4
+            positionWindow(win, screen, 0.25, y, 0.75, h)
+        elseif frameMatches(win, screen, 0.25, y, 0.75, h) then
+            -- At 3/4 -> go to 2/3
+            positionWindow(win, screen, 1/3, y, 2/3, h)
+        elseif frameMatches(win, screen, 1/3, y, 2/3, h) then
+            -- At 2/3 -> go to 1/2
+            positionWindow(win, screen, 0.5, y, 0.5, h)
+        elseif frameMatches(win, screen, 0.5, y, 0.5, h) then
             -- At 1/2 -> go to 1/3
             positionWindow(win, screen, 2/3, y, 1/3, h)
         elseif frameMatches(win, screen, 2/3, y, 1/3, h) then
             -- At 1/3 -> go to 1/4
             positionWindow(win, screen, 0.75, y, 0.25, h)
         elseif frameMatches(win, screen, 0.75, y, 0.25, h) then
-            -- At 1/4 -> go to 3/4
-            positionWindow(win, screen, 0.25, y, 0.75, h)
-        elseif frameMatches(win, screen, 0.25, y, 0.75, h) then
-            -- At 3/4 -> go to 2/3
-            positionWindow(win, screen, 1/3, y, 2/3, h)
-        elseif frameMatches(win, screen, 1/3, y, 2/3, h) then
-            -- At 2/3 -> go to full width
+            -- At 1/4 -> cycle back to full width
             positionWindow(win, screen, 0, y, 1, h)
-        elseif frameMatches(win, screen, 0, y, 1, h) then
-            -- At full width -> cycle back to 1/2
-            positionWindow(win, screen, 0.5, y, 0.5, h)
         else
-            -- Any other width -> start with 1/2
-            positionWindow(win, screen, 0.5, y, 0.5, h)
+            -- Any other width -> start with full
+            positionWindow(win, screen, 0, y, 1, h)
         end
     -- Not at right edge - move right based on width
     elseif w >= 0.5 then
@@ -434,42 +461,48 @@ function M.wasdRight()
 end
 
 ------------------------------------------------------
--- Q/E: Push to edge then cycle screens
+-- Q/E: Simple screen cycling (same as arrow keys)
 ------------------------------------------------------
 
--- Q: First press -> LHS full height, second press -> RHS of previous screen
+-- Q: Progressive - left half (keep height) -> full height -> previous screen (same as Left arrow)
 function M.cycleScreenQ()
     local win, screen = getFocusedWindowAndScreen()
     if not win or not screen then return end
 
-    local w = getWidthRatio(win, screen)
+    local h = getHeightRatio(win, screen)
+    local y = (win:frame().y - screen:frame().y) / screen:frame().h
 
-    -- Check if already on left side full height
-    if frameMatches(win, screen, 0, 0, w, 1) then
-        -- Move to previous screen, right side, full height
+    -- Step 3: If at left half with full height -> move to previous screen right half
+    if frameMatches(win, screen, 0, 0, 0.5, 1) then
         local prevScreen = screen:previous()
-        positionWindow(win, prevScreen, 1 - w, 0, w, 1)
+        positionWindow(win, prevScreen, 0.5, 0, 0.5, 1)
+    -- Step 2: If at left half but not full height -> make full height
+    elseif frameMatches(win, screen, 0, y, 0.5, h) then
+        positionWindow(win, screen, 0, 0, 0.5, 1)
+    -- Step 1: Any other position -> move to left half, keep current height
     else
-        -- Move to left side of current screen, full height, keep width
-        positionWindow(win, screen, 0, 0, w, 1)
+        positionWindow(win, screen, 0, y, 0.5, h)
     end
 end
 
--- E: First press -> RHS full height, second press -> LHS of next screen
+-- E: Progressive - right half (keep height) -> full height -> next screen (same as Right arrow)
 function M.cycleScreenE()
     local win, screen = getFocusedWindowAndScreen()
     if not win or not screen then return end
 
-    local w = getWidthRatio(win, screen)
+    local h = getHeightRatio(win, screen)
+    local y = (win:frame().y - screen:frame().y) / screen:frame().h
 
-    -- Check if already on right side full height
-    if frameMatches(win, screen, 1 - w, 0, w, 1) then
-        -- Move to next screen, left side, full height
+    -- Step 3: If at right half with full height -> move to next screen left half
+    if frameMatches(win, screen, 0.5, 0, 0.5, 1) then
         local nextScreen = screen:next()
-        positionWindow(win, nextScreen, 0, 0, w, 1)
+        positionWindow(win, nextScreen, 0, 0, 0.5, 1)
+    -- Step 2: If at right half but not full height -> make full height
+    elseif frameMatches(win, screen, 0.5, y, 0.5, h) then
+        positionWindow(win, screen, 0.5, 0, 0.5, 1)
+    -- Step 1: Any other position -> move to right half, keep current height
     else
-        -- Move to right side of current screen, full height, keep width
-        positionWindow(win, screen, 1 - w, 0, w, 1)
+        positionWindow(win, screen, 0.5, y, 0.5, h)
     end
 end
 
