@@ -1,6 +1,10 @@
 -- Window Manager
 -- Simple, reliable window management to replace Rectangle
 
+-- Allow dependency injection for testing
+-- In Hammerspoon, `hs` is global. In tests, we inject the mock.
+local hs = hs or require("tests.mocks.hs_mock")
+
 local M = {}
 
 -- State tracking for cycling behavior
@@ -144,45 +148,33 @@ end
 -- Smart arrow navigation
 ------------------------------------------------------
 
--- Right arrow: Progressive - right half (keep height) -> full height -> next screen
+-- Right arrow: right half (full height) -> next screen
 function M.smartRight()
     local win, screen = getFocusedWindowAndScreen()
     if not win or not screen then return end
 
-    local h = getHeightRatio(win, screen)
-    local y = (win:frame().y - screen:frame().y) / screen:frame().h
-
-    -- Step 3: If at right half with full height -> move to next screen left half
+    -- If at right half with full height -> move to next screen left half
     if frameMatches(win, screen, 0.5, 0, 0.5, 1) then
         local nextScreen = screen:next()
         positionWindow(win, nextScreen, 0, 0, 0.5, 1)
-    -- Step 2: If at right half but not full height -> make full height
-    elseif frameMatches(win, screen, 0.5, y, 0.5, h) then
-        positionWindow(win, screen, 0.5, 0, 0.5, 1)
-    -- Step 1: Any other position -> move to right half, keep current height
+    -- Any other position -> move to right half with full height
     else
-        positionWindow(win, screen, 0.5, y, 0.5, h)
+        positionWindow(win, screen, 0.5, 0, 0.5, 1)
     end
 end
 
--- Left arrow: Progressive - left half (keep height) -> full height -> previous screen
+-- Left arrow: left half (full height) -> previous screen
 function M.smartLeft()
     local win, screen = getFocusedWindowAndScreen()
     if not win or not screen then return end
 
-    local h = getHeightRatio(win, screen)
-    local y = (win:frame().y - screen:frame().y) / screen:frame().h
-
-    -- Step 3: If at left half with full height -> move to previous screen right half
+    -- If at left half with full height -> move to previous screen right half
     if frameMatches(win, screen, 0, 0, 0.5, 1) then
         local prevScreen = screen:previous()
         positionWindow(win, prevScreen, 0.5, 0, 0.5, 1)
-    -- Step 2: If at left half but not full height -> make full height
-    elseif frameMatches(win, screen, 0, y, 0.5, h) then
-        positionWindow(win, screen, 0, 0, 0.5, 1)
-    -- Step 1: Any other position -> move to left half, keep current height
+    -- Any other position -> move to left half with full height
     else
-        positionWindow(win, screen, 0, y, 0.5, h)
+        positionWindow(win, screen, 0, 0, 0.5, 1)
     end
 end
 
@@ -522,18 +514,16 @@ end
 function M.bindHotkeys()
     local mash = {"cmd", "alt"}
 
-    -- Number keys: cycling width positions
-    hs.hotkey.bind(mash, "1", M.threeQuarterWidth)
-    hs.hotkey.bind(mash, "2", M.twoThirdWidth)
-    hs.hotkey.bind(mash, "3", M.halfWidth)
-    hs.hotkey.bind(mash, "4", M.oneThirdWidth)
-    hs.hotkey.bind(mash, "5", M.oneQuarterWidth)
+    -- Number keys: cycling width positions (shifted left by one key)
+    -- Backtick = 3/4, 1 = 2/3, 2 = 1/2, 3 = 1/3, 4 = 1/4
+    hs.hotkey.bind(mash, "`", M.threeQuarterWidth)
+    hs.hotkey.bind(mash, "1", M.twoThirdWidth)
+    hs.hotkey.bind(mash, "2", M.halfWidth)
+    hs.hotkey.bind(mash, "3", M.oneThirdWidth)
+    hs.hotkey.bind(mash, "4", M.oneQuarterWidth)
 
     -- Enter: Maximize
     hs.hotkey.bind(mash, "return", M.maximize)
-
-    -- Backtick: Maximize (alternative)
-    hs.hotkey.bind(mash, "`", M.maximize)
 
     -- Arrows: Smart navigation (basic, non-cycling up/down)
     hs.hotkey.bind(mash, "right", M.smartRight)
