@@ -41,7 +41,9 @@ One-key workspace setup with `Cmd+Opt+Ctrl+T`:
 ```lua
 -- ~/.hammerspoon/init.lua
 -- Point to the main configuration in ~/mac-automation
-package.path = package.path .. ";" .. os.getenv("HOME") .. "/mac-automation/?.lua"
+local home = os.getenv("HOME")
+package.path = package.path .. ";" .. home .. "/mac-automation/?.lua"
+package.path = package.path .. ";" .. home .. "/mac-automation/?/init.lua"
 require("hammerspoon_config")
 ```
 4. Reload Hammerspoon config
@@ -51,6 +53,57 @@ require("hammerspoon_config")
 Edit `hammerspoon_config.lua` to customize hotkeys and behavior.
 
 Adjust screen names in `dev_layout.lua` to match your setup.
+
+## Menu Bar Stats
+
+System stats displayed in separate menu bar items:
+- **CPU** - Click for top 10 processes by CPU usage (with kill option)
+- **RAM** - Click for top 10 processes by memory (with kill option)
+- **Network** - Click for network-active processes
+- **Battery** - Click to toggle caffeine (prevent sleep)
+- **Timer** - Pomodoro timer + clipboard history
+
+### Adding a New Menubar Module
+
+1. Create `angus_scripts/menubar/yourmodule.lua`
+2. Follow the pattern in existing modules (cpu.lua, ram.lua)
+3. Register in `angus_scripts/menubar/init.lua`
+4. Add tests in `tests/menubar/yourmodule_spec.lua`
+
+## Testing
+
+Run all tests:
+```bash
+busted tests/
+```
+
+## Hammerspoon Best Practices
+
+### Preventing Garbage Collection
+Hammerspoon objects (menubars, timers, watchers) can disappear if Lua's garbage collector
+decides they're no longer referenced. Always store these in **global variables**:
+
+```lua
+-- WRONG - will be garbage collected
+local myMenubar = hs.menubar.new()
+
+-- CORRECT - persists for lifetime of Hammerspoon
+myMenubar = hs.menubar.new()
+
+-- ALSO CORRECT - use a global registry table
+_G.myRefs = _G.myRefs or {}
+_G.myRefs.menubar = hs.menubar.new()
+```
+
+See: [Hammerspoon Wiki on GC](https://github.com/asmagill/hammerspoon/wiki/Variable-Scope-and-Garbage-Collection)
+
+### Debug tip
+Force GC to test stability:
+```lua
+-- In Hammerspoon console:
+collectgarbage()
+collectgarbage()
+```
 
 ## Note
 

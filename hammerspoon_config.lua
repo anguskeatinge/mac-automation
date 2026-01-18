@@ -14,6 +14,6 @@ slackKeyAppWatcher = require("angus_scripts.slack_page_up_down")
 
 require("angus_scripts.vscode_chrome_ctrl_opt_L_R")
 
--- System stats menu bar (CPU, RAM, Network, Battery, Disk, Pomodoro, Clipboard)
-systemStats = require("angus_scripts.system_stats")
-systemStats.start()
+-- Menu bar stats (CPU, RAM, Network, Battery, Pomodoro, Clipboard)
+menubar = require("angus_scripts.menubar")
+menubar.start()
