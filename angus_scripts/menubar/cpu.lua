@@ -49,26 +49,59 @@ function M.killProcess(pid)
     hs.alert.show("Killed process " .. pid)
 end
 
--- Build the dropdown menu showing top processes by CPU
+-- Build the dropdown menu showing top processes by CPU (grouped by app)
 function M.buildMenu()
-    local output = M._deps.executeCommand("ps aux -r | tail -n +2 | head -n 10")
-    local processes = utils.parsePsOutput(output)
+    -- Get more processes (50) to allow for grouping
+    local output = M._deps.executeCommand("ps aux -r | tail -n +2 | head -n 50")
+    local processes = utils.parsePsOutputWithCommand(output)
+    local groups = utils.groupProcesses(processes, "cpu")
 
     local menu = {
-        { title = "Top Processes by CPU", disabled = true },
+        { title = "Top Apps by CPU", disabled = true },
         { title = "-" },
     }
 
-    for _, p in ipairs(processes) do
-        table.insert(menu, {
-            title = string.format("%-18s %5.1f%%", utils.truncateText(p.name, 18), p.cpu),
-            menu = {
-                { title = string.format("Kill %s (PID %d)", p.name, p.pid), fn = function() M.killProcess(p.pid) end }
-            }
-        })
+    -- Show top 10 groups
+    local groupCount = 0
+    for _, g in ipairs(groups) do
+        if groupCount >= 10 then break end
+        groupCount = groupCount + 1
+
+        if g.count == 1 then
+            -- Single process - show directly with kill option
+            local p = g.processes[1]
+            table.insert(menu, {
+                title = string.format("%-20s %5.1f%%", utils.truncateText(g.appName, 20), p.cpu),
+                menu = {
+                    { title = string.format("Kill PID %d", p.pid), fn = function() M.killProcess(p.pid) end }
+                }
+            })
+        else
+            -- Multiple processes - show group header then children
+            table.insert(menu, {
+                title = string.format("%-14s %5.1f%% (%d)", utils.truncateText(g.appName, 14), g.totalCpu, g.count),
+                disabled = true,
+            })
+
+            -- Show child processes with tree characters
+            for i, p in ipairs(g.processes) do
+                local prefix = (i == #g.processes) and "  └" or "  ├"
+                table.insert(menu, {
+                    title = string.format("%s PID %-8d %5.1f%%", prefix, p.pid, p.cpu),
+                    menu = {
+                        { title = string.format("Kill PID %d", p.pid), fn = function() M.killProcess(p.pid) end }
+                    }
+                })
+            end
+        end
+
+        -- Add separator between groups (but not after the last one)
+        if groupCount < 10 and groupCount < #groups then
+            table.insert(menu, { title = "-" })
+        end
     end
 
-    if #processes == 0 then
+    if #groups == 0 then
         table.insert(menu, { title = "(no processes)", disabled = true })
     end
 

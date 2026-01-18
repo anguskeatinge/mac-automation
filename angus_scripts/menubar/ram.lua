@@ -32,28 +32,62 @@ function M.killProcess(pid)
     hs.alert.show("Killed process " .. pid)
 end
 
--- Build the dropdown menu showing top processes by memory
+-- Build the dropdown menu showing top processes by memory (grouped by app)
 function M.buildMenu()
-    local output = M._deps.executeCommand("ps aux -m | tail -n +2 | head -n 10")
-    local processes = utils.parsePsOutput(output)
+    -- Get more processes (50) to allow for grouping
+    local output = M._deps.executeCommand("ps aux -m | tail -n +2 | head -n 50")
+    local processes = utils.parsePsOutputWithCommand(output)
+    local groups = utils.groupProcesses(processes, "rss")
 
     local menu = {
-        { title = "Top Processes by Memory", disabled = true },
+        { title = "Top Apps by Memory", disabled = true },
         { title = "-" },
     }
 
-    for _, p in ipairs(processes) do
-        -- RSS is in KB, convert to human readable
-        local memStr = utils.formatBytes((p.rss or 0) * 1024)
-        table.insert(menu, {
-            title = string.format("%-18s %6s", utils.truncateText(p.name, 18), memStr),
-            menu = {
-                { title = string.format("Kill %s (PID %d)", p.name, p.pid), fn = function() M.killProcess(p.pid) end }
-            }
-        })
+    -- Show top 10 groups
+    local groupCount = 0
+    for _, g in ipairs(groups) do
+        if groupCount >= 10 then break end
+        groupCount = groupCount + 1
+
+        local totalMemStr = utils.formatBytes((g.totalRss or 0) * 1024)
+
+        if g.count == 1 then
+            -- Single process - show directly with kill option
+            local p = g.processes[1]
+            table.insert(menu, {
+                title = string.format("%-20s %6s", utils.truncateText(g.appName, 20), totalMemStr),
+                menu = {
+                    { title = string.format("Kill PID %d", p.pid), fn = function() M.killProcess(p.pid) end }
+                }
+            })
+        else
+            -- Multiple processes - show group header then children
+            table.insert(menu, {
+                title = string.format("%-16s %6s (%d)", utils.truncateText(g.appName, 16), totalMemStr, g.count),
+                disabled = true,
+            })
+
+            -- Show child processes with tree characters
+            for i, p in ipairs(g.processes) do
+                local prefix = (i == #g.processes) and "  └" or "  ├"
+                local memStr = utils.formatBytes((p.rss or 0) * 1024)
+                table.insert(menu, {
+                    title = string.format("%s PID %-8d %6s", prefix, p.pid, memStr),
+                    menu = {
+                        { title = string.format("Kill PID %d", p.pid), fn = function() M.killProcess(p.pid) end }
+                    }
+                })
+            end
+        end
+
+        -- Add separator between groups (but not after the last one)
+        if groupCount < 10 and groupCount < #groups then
+            table.insert(menu, { title = "-" })
+        end
     end
 
-    if #processes == 0 then
+    if #groups == 0 then
         table.insert(menu, { title = "(no processes)", disabled = true })
     end
 

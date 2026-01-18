@@ -15,6 +15,10 @@ M._state = {
     vmStat = { pageSize = 4096, pagesWiredDown = 500000, pagesActive = 1000000, pagesInactive = 300000, pagesFree = 200000 },
     batteryPercentage = 75,
     batteryTimeRemaining = 180,
+    batteryIsCharging = false,
+    batteryIsCharged = false,
+    batteryHealth = "Good",
+    batteryTimeToFullCharge = -1,
     caffeineState = {},
     menubars = {},
     timers = {},
@@ -37,6 +41,10 @@ function M.reset()
         vmStat = { pageSize = 4096, pagesWiredDown = 500000, pagesActive = 1000000, pagesInactive = 300000, pagesFree = 200000 },
         batteryPercentage = 75,
         batteryTimeRemaining = 180,
+        batteryIsCharging = false,
+        batteryIsCharged = false,
+        batteryHealth = "Good",
+        batteryTimeToFullCharge = -1,
         caffeineState = {},
         menubars = {},
         timers = {},
@@ -239,6 +247,22 @@ function M.battery.timeRemaining()
     return M._state.batteryTimeRemaining
 end
 
+function M.battery.isCharging()
+    return M._state.batteryIsCharging
+end
+
+function M.battery.isCharged()
+    return M._state.batteryIsCharged
+end
+
+function M.battery.health()
+    return M._state.batteryHealth
+end
+
+function M.battery.timeToFullCharge()
+    return M._state.batteryTimeToFullCharge
+end
+
 -- Test helpers for battery
 function M.setBatteryPercentage(pct)
     M._state.batteryPercentage = pct
@@ -246,6 +270,22 @@ end
 
 function M.setBatteryTimeRemaining(minutes)
     M._state.batteryTimeRemaining = minutes
+end
+
+function M.setBatteryIsCharging(charging)
+    M._state.batteryIsCharging = charging
+end
+
+function M.setBatteryIsCharged(charged)
+    M._state.batteryIsCharged = charged
+end
+
+function M.setBatteryHealth(health)
+    M._state.batteryHealth = health
+end
+
+function M.setBatteryTimeToFullCharge(minutes)
+    M._state.batteryTimeToFullCharge = minutes
 end
 
 ------------------------------------------------------

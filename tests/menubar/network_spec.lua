@@ -121,6 +121,85 @@ en0   1500  <Link#4>      aa:bb:cc:dd:ee:ff 234567     0 %d   345678     0  %d  
             assert.is_nil(network._state.menubar)
             assert.is_nil(network._state.prevNetBytes)
             assert.is_nil(network._state.prevNetTime)
+            assert.are.equal(0, #network._state.history)
+        end)
+    end)
+
+    describe("history tracking", function()
+        it("adds entries to history on refresh", function()
+            local time = 1000
+            local bytesSequence = {
+                { bytesIn = 1000000, bytesOut = 500000 },
+                { bytesIn = 2048000, bytesOut = 1024000 },
+                { bytesIn = 3096000, bytesOut = 1524000 },
+            }
+            local callCount = 0
+
+            network._deps.getTime = function()
+                time = time + 1
+                return time
+            end
+            network._deps.executeCommand = function(cmd)
+                callCount = callCount + 1
+                local bytes = bytesSequence[math.min(callCount, #bytesSequence)]
+                return string.format([[
+Name  Mtu   Network       Address            Ipkts Ierrs     Ibytes    Opkts Oerrs     Obytes  Coll
+en0   1500  <Link#4>      aa:bb:cc:dd:ee:ff 234567     0 %d   345678     0  %d     0
+]], bytes.bytesIn, bytes.bytesOut)
+            end
+
+            network.create()
+            network.refresh()  -- First call sets baseline
+            network.refresh()  -- Second call adds to history
+            network.refresh()  -- Third call adds to history
+
+            assert.are.equal(2, #network._state.history)
+        end)
+
+        it("calculates history totals", function()
+            network._state.history = {
+                { bytesIn = 1000, bytesOut = 500 },
+                { bytesIn = 2000, bytesOut = 1000 },
+                { bytesIn = 500, bytesOut = 250 },
+            }
+
+            local totalIn, totalOut = network.getHistoryTotals()
+            assert.are.equal(3500, totalIn)
+            assert.are.equal(1750, totalOut)
+        end)
+
+        it("limits history to HISTORY_SIZE", function()
+            network.create()
+            for i = 1, 35 do
+                network.addToHistory(1000 * i, 500 * i, i)
+            end
+
+            assert.are.equal(network.HISTORY_SIZE, #network._state.history)
+        end)
+    end)
+
+    describe("buildMenu", function()
+        it("shows 1-minute totals when history exists", function()
+            network._state.history = {
+                { bytesIn = 10485760, bytesOut = 1048576 },  -- 10M, 1M
+            }
+            network._deps.executeCommand = function(cmd)
+                return ""
+            end
+
+            network.create()
+            local menu = network.buildMenu()
+
+            -- Find the 1-min totals entry
+            local foundTotals = false
+            for _, item in ipairs(menu) do
+                if item.title and item.title:match("Last 1 min") then
+                    foundTotals = true
+                    assert.truthy(item.title:match("10M"))
+                    assert.truthy(item.title:match("1M"))
+                end
+            end
+            assert.is_true(foundTotals)
         end)
     end)
 end)

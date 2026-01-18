@@ -85,7 +85,7 @@ user    1234  1.5   12.3   1000   500000  ??  S     1:00PM   0:30.00 /usr/bin/pr
             local menu = ram.buildMenu()
 
             assert.is_true(#menu >= 1)
-            assert.are.equal("Top Processes by Memory", menu[1].title)
+            assert.are.equal("Top Apps by Memory", menu[1].title)
         end)
 
         it("includes process entries with formatted memory", function()
@@ -108,6 +108,35 @@ user    1234  1.5   12.3   1000   524288  ??  S     1:00PM   0:30.00 /usr/bin/pr
                 end
             end
             assert.is_true(foundProcess)
+        end)
+
+        it("groups processes by app name", function()
+            ram._deps.executeCommand = function(cmd)
+                return [[
+user    1234  1.5   12.3   1000   409600  ??  S     1:00PM   0:30.00 /Applications/Chrome.app/Contents/MacOS/Chrome
+user    1235  0.5    2.0   1000   102400  ??  S     1:00PM   0:30.00 /Applications/Chrome.app/Contents/MacOS/Chrome Helper
+user    5678  3.0    5.0   1000   204800  ??  S     1:00PM   0:30.00 /usr/bin/python3
+]]
+            end
+
+            ram.create()
+            local menu = ram.buildMenu()
+
+            -- Find Chrome group header
+            local foundChrome = false
+            local foundPython = false
+            for _, item in ipairs(menu) do
+                if item.title and item.title:match("Chrome") and item.title:match("%(2%)") then
+                    foundChrome = true
+                    -- Should show total memory (409600 + 102400 = 512000 KB = 500M)
+                    assert.truthy(item.title:match("500M"))
+                end
+                if item.title and item.title:match("python3") then
+                    foundPython = true
+                end
+            end
+            assert.is_true(foundChrome)
+            assert.is_true(foundPython)
         end)
     end)
 

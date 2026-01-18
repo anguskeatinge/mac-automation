@@ -24,44 +24,45 @@ M.pomodoro = pomodoro
 
 -- Global registry to prevent garbage collection of Hammerspoon objects
 -- See: https://github.com/asmagill/hammerspoon/wiki/Variable-Scope-and-Garbage-Collection
-_G._hammerspoon_menubar_refs = _G._hammerspoon_menubar_refs or {}
+-- Initialized fresh in start() to avoid stale references on reload
 
 -- Check and recover missing menubars
 local function recoverMissingMenubars()
     local recovered = false
+    local mb
 
     if not cpu._state.menubar then
         print("[menubar] CPU menubar was nil, recreating")
-        cpu.create()
-        _G._hammerspoon_menubar_refs.cpu = cpu.menubar
+        mb = cpu.create()
+        _G._hammerspoon_menubar_refs.cpu = mb
         recovered = true
     end
 
     if not ram._state.menubar then
         print("[menubar] RAM menubar was nil, recreating")
-        ram.create()
-        _G._hammerspoon_menubar_refs.ram = ram.menubar
+        mb = ram.create()
+        _G._hammerspoon_menubar_refs.ram = mb
         recovered = true
     end
 
     if not network._state.menubar then
         print("[menubar] Network menubar was nil, recreating")
-        network.create()
-        _G._hammerspoon_menubar_refs.network = network.menubar
+        mb = network.create()
+        _G._hammerspoon_menubar_refs.network = mb
         recovered = true
     end
 
     if not battery._state.menubar then
         print("[menubar] Battery menubar was nil, recreating")
-        battery.create()
-        _G._hammerspoon_menubar_refs.battery = battery.menubar
+        mb = battery.create()
+        _G._hammerspoon_menubar_refs.battery = mb
         recovered = true
     end
 
     if not pomodoro._state.menubar then
         print("[menubar] Pomodoro menubar was nil, recreating")
-        pomodoro.create()
-        _G._hammerspoon_menubar_refs.pomodoro = pomodoro.menubar
+        mb = pomodoro.create()
+        _G._hammerspoon_menubar_refs.pomodoro = mb
         recovered = true
     end
 
@@ -92,38 +93,68 @@ end
 
 -- Start all menubars
 function M.start()
-    -- Create menubars (rightmost first, so order is: CPU RAM Net Battery Pomodoro)
-    pomodoro.create()
-    battery.create()
-    network.create()
-    ram.create()
-    cpu.create()
+    -- Use rawset to bypass any metamethods and ensure direct table storage
+    rawset(_G, "_hammerspoon_menubar_refs", {})
 
-    -- Store ALL references in global registry to prevent GC
-    _G._hammerspoon_menubar_refs = {
-        cpu = cpu.menubar,
-        ram = ram.menubar,
-        network = network.menubar,
-        battery = battery.menubar,
-        pomodoro = pomodoro.menubar,
+    -- Create all menubars and store BOTH the raw menubar AND keep module reference
+    -- Order: first = rightmost, last = leftmost
+
+    local refs = _G._hammerspoon_menubar_refs
+
+    -- Create each one and immediately store in multiple places
+    refs.network = network.create()
+    network._persistent = refs.network  -- extra ref on module itself
+
+    refs.pomodoro = pomodoro.create()
+    pomodoro._persistent = refs.pomodoro
+
+    refs.battery = battery.create()
+    battery._persistent = refs.battery
+
+    refs.ram = ram.create()
+    ram._persistent = refs.ram
+
+    refs.cpu = cpu.create()
+    cpu._persistent = refs.cpu
+
+    -- Also store on M
+    M._menubars = {
+        network = refs.network,
+        pomodoro = refs.pomodoro,
+        battery = refs.battery,
+        ram = refs.ram,
+        cpu = refs.cpu,
     }
 
-    -- Start refresh timer (every 2 seconds)
+    -- Start refresh timer
     M._state.refreshTimer = hs.timer.doEvery(2, function()
         pcall(M.refresh)
     end)
-    -- Store in global registry
-    _G._hammerspoon_menubar_refs.refreshTimer = M._state.refreshTimer
-    -- Keep extra reference on module
+    refs.refreshTimer = M._state.refreshTimer
     M.refreshTimer = M._state.refreshTimer
 
     -- Store clipboard watcher reference
     if pomodoro.clipboardWatcher then
-        _G._hammerspoon_menubar_refs.clipboardWatcher = pomodoro.clipboardWatcher
+        refs.clipboardWatcher = pomodoro.clipboardWatcher
     end
 
     -- Initial refresh
     M.refresh()
+
+    -- Force all menubars to (re)register with macOS
+    refs.network:returnToMenuBar()
+    refs.pomodoro:returnToMenuBar()
+    refs.battery:returnToMenuBar()
+    refs.ram:returnToMenuBar()
+    refs.cpu:returnToMenuBar()
+
+    -- Print debug info
+    print("[menubar] Created menubars:")
+    for k, v in pairs(refs) do
+        if type(v) == "userdata" and v.title then
+            print(string.format("  %s: %s inMenuBar=%s", k, tostring(v), tostring(v:isInMenuBar())))
+        end
+    end
 end
 
 -- Stop all menubars

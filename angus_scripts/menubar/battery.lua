@@ -7,6 +7,10 @@ local M = {}
 M._deps = {
     batteryPercentage = function() return hs.battery.percentage() end,
     batteryTimeRemaining = function() return hs.battery.timeRemaining() end,
+    batteryIsCharging = function() return hs.battery.isCharging() end,
+    batteryIsCharged = function() return hs.battery.isCharged() end,
+    batteryHealth = function() return hs.battery.health() end,
+    batteryTimeToFullCharge = function() return hs.battery.timeToFullCharge() end,
     caffeinateSet = function(type, value) return hs.caffeinate.set(type, value) end,
 }
 
@@ -43,11 +47,88 @@ function M.toggleCaffeine()
     M._deps.caffeinateSet("systemIdle", M._state.caffeineEnabled)
 end
 
--- Build the dropdown menu with caffeine toggle
-function M.buildMenu()
-    local menu = {}
+-- Format time as hours and minutes
+function M.formatTime(minutes)
+    if not minutes or minutes < 0 then
+        return nil
+    end
+    local hours = math.floor(minutes / 60)
+    local mins = minutes % 60
+    if hours > 0 then
+        return string.format("%dh %dm", hours, mins)
+    else
+        return string.format("%dm", mins)
+    end
+end
 
-    local caffeineText = M._state.caffeineEnabled and "[ON] Caffeine (awake)" or "[OFF] Caffeine (sleep allowed)"
+-- Build the dropdown menu with battery status and caffeine toggle
+function M.buildMenu()
+    local menu = {
+        { title = "Battery Status", disabled = true },
+        { title = "-" },
+    }
+
+    -- Get battery info
+    local pct = M._deps.batteryPercentage()
+    local isCharging = M._deps.batteryIsCharging()
+    local isCharged = M._deps.batteryIsCharged()
+    local health = M._deps.batteryHealth()
+    local timeRemaining = M._deps.batteryTimeRemaining()
+    local timeToFull = M._deps.batteryTimeToFullCharge()
+
+    -- Charge level
+    if pct then
+        table.insert(menu, {
+            title = string.format("Charge: %d%%", pct),
+            disabled = true,
+        })
+    end
+
+    -- Charging status / time remaining
+    if isCharged then
+        table.insert(menu, {
+            title = "Status: Fully Charged",
+            disabled = true,
+        })
+    elseif isCharging then
+        local timeStr = M.formatTime(timeToFull)
+        if timeStr then
+            table.insert(menu, {
+                title = string.format("Charging: %s to full", timeStr),
+                disabled = true,
+            })
+        else
+            table.insert(menu, {
+                title = "Charging...",
+                disabled = true,
+            })
+        end
+    else
+        -- On battery
+        local timeStr = M.formatTime(timeRemaining)
+        if timeStr then
+            table.insert(menu, {
+                title = string.format("Time Remaining: %s", timeStr),
+                disabled = true,
+            })
+        end
+    end
+
+    -- Health
+    if health then
+        table.insert(menu, {
+            title = string.format("Health: %s", health),
+            disabled = true,
+        })
+    end
+
+    -- Separator before caffeine toggle
+    table.insert(menu, { title = "-" })
+
+    -- Caffeine toggle with clearer label
+    local caffeineText = M._state.caffeineEnabled
+        and "Caffeine: ON (preventing sleep)"
+        or "Caffeine: OFF (sleep allowed)"
     table.insert(menu, {
         title = caffeineText,
         fn = M.toggleCaffeine,
@@ -97,6 +178,10 @@ function M.reset()
     M._deps = {
         batteryPercentage = function() return hs.battery.percentage() end,
         batteryTimeRemaining = function() return hs.battery.timeRemaining() end,
+        batteryIsCharging = function() return hs.battery.isCharging() end,
+        batteryIsCharged = function() return hs.battery.isCharged() end,
+        batteryHealth = function() return hs.battery.health() end,
+        batteryTimeToFullCharge = function() return hs.battery.timeToFullCharge() end,
         caffeinateSet = function(type, value) return hs.caffeinate.set(type, value) end,
     }
 end

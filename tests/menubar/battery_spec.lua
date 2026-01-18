@@ -102,23 +102,167 @@ describe("Battery Module", function()
         end)
     end)
 
-    describe("buildMenu", function()
-        it("includes caffeine toggle", function()
-            battery._state.caffeineEnabled = false
-            battery.create()
-            local menu = battery.buildMenu()
-
-            assert.is_true(#menu >= 1)
-            assert.truthy(menu[1].title:match("Caffeine"))
-            assert.truthy(menu[1].title:match("%[OFF%]"))  -- OFF when off
+    describe("formatTime", function()
+        it("formats hours and minutes", function()
+            assert.are.equal("2h 30m", battery.formatTime(150))
         end)
 
-        it("shows ON when caffeine is on", function()
-            battery._state.caffeineEnabled = true
+        it("formats just minutes when less than an hour", function()
+            assert.are.equal("45m", battery.formatTime(45))
+        end)
+
+        it("returns nil for nil input", function()
+            assert.is_nil(battery.formatTime(nil))
+        end)
+
+        it("returns nil for negative input", function()
+            assert.is_nil(battery.formatTime(-10))
+        end)
+    end)
+
+    describe("buildMenu", function()
+        it("includes battery status header", function()
+            battery._deps.batteryPercentage = function() return 75 end
+            battery._deps.batteryIsCharging = function() return false end
+            battery._deps.batteryIsCharged = function() return false end
+            battery._deps.batteryHealth = function() return "Good" end
+            battery._deps.batteryTimeRemaining = function() return 120 end
+            battery._deps.batteryTimeToFullCharge = function() return -1 end
+
             battery.create()
             local menu = battery.buildMenu()
 
-            assert.truthy(menu[1].title:match("%[ON%]"))  -- ON when on
+            assert.are.equal("Battery Status", menu[1].title)
+        end)
+
+        it("shows charge percentage", function()
+            battery._deps.batteryPercentage = function() return 75 end
+            battery._deps.batteryIsCharging = function() return false end
+            battery._deps.batteryIsCharged = function() return false end
+            battery._deps.batteryHealth = function() return "Good" end
+            battery._deps.batteryTimeRemaining = function() return nil end
+            battery._deps.batteryTimeToFullCharge = function() return nil end
+
+            battery.create()
+            local menu = battery.buildMenu()
+
+            -- Find charge entry
+            local foundCharge = false
+            for _, item in ipairs(menu) do
+                if item.title and item.title:match("Charge: 75%%") then
+                    foundCharge = true
+                end
+            end
+            assert.is_true(foundCharge)
+        end)
+
+        it("shows charging status when charging", function()
+            battery._deps.batteryPercentage = function() return 50 end
+            battery._deps.batteryIsCharging = function() return true end
+            battery._deps.batteryIsCharged = function() return false end
+            battery._deps.batteryHealth = function() return "Good" end
+            battery._deps.batteryTimeRemaining = function() return nil end
+            battery._deps.batteryTimeToFullCharge = function() return 90 end
+
+            battery.create()
+            local menu = battery.buildMenu()
+
+            -- Find charging entry
+            local foundCharging = false
+            for _, item in ipairs(menu) do
+                if item.title and item.title:match("Charging") and item.title:match("to full") then
+                    foundCharging = true
+                end
+            end
+            assert.is_true(foundCharging)
+        end)
+
+        it("shows fully charged status", function()
+            battery._deps.batteryPercentage = function() return 100 end
+            battery._deps.batteryIsCharging = function() return false end
+            battery._deps.batteryIsCharged = function() return true end
+            battery._deps.batteryHealth = function() return "Good" end
+            battery._deps.batteryTimeRemaining = function() return nil end
+            battery._deps.batteryTimeToFullCharge = function() return nil end
+
+            battery.create()
+            local menu = battery.buildMenu()
+
+            -- Find fully charged entry
+            local foundCharged = false
+            for _, item in ipairs(menu) do
+                if item.title and item.title:match("Fully Charged") then
+                    foundCharged = true
+                end
+            end
+            assert.is_true(foundCharged)
+        end)
+
+        it("shows health", function()
+            battery._deps.batteryPercentage = function() return 75 end
+            battery._deps.batteryIsCharging = function() return false end
+            battery._deps.batteryIsCharged = function() return false end
+            battery._deps.batteryHealth = function() return "Good" end
+            battery._deps.batteryTimeRemaining = function() return nil end
+            battery._deps.batteryTimeToFullCharge = function() return nil end
+
+            battery.create()
+            local menu = battery.buildMenu()
+
+            -- Find health entry
+            local foundHealth = false
+            for _, item in ipairs(menu) do
+                if item.title and item.title:match("Health: Good") then
+                    foundHealth = true
+                end
+            end
+            assert.is_true(foundHealth)
+        end)
+
+        it("includes caffeine toggle with clearer label", function()
+            battery._state.caffeineEnabled = false
+            battery._deps.batteryPercentage = function() return 75 end
+            battery._deps.batteryIsCharging = function() return false end
+            battery._deps.batteryIsCharged = function() return false end
+            battery._deps.batteryHealth = function() return nil end
+            battery._deps.batteryTimeRemaining = function() return nil end
+            battery._deps.batteryTimeToFullCharge = function() return nil end
+
+            battery.create()
+            local menu = battery.buildMenu()
+
+            -- Find caffeine entry
+            local foundCaffeine = false
+            for _, item in ipairs(menu) do
+                if item.title and item.title:match("Caffeine") then
+                    foundCaffeine = true
+                    assert.truthy(item.title:match("sleep allowed"))
+                end
+            end
+            assert.is_true(foundCaffeine)
+        end)
+
+        it("shows ON status for caffeine", function()
+            battery._state.caffeineEnabled = true
+            battery._deps.batteryPercentage = function() return 75 end
+            battery._deps.batteryIsCharging = function() return false end
+            battery._deps.batteryIsCharged = function() return false end
+            battery._deps.batteryHealth = function() return nil end
+            battery._deps.batteryTimeRemaining = function() return nil end
+            battery._deps.batteryTimeToFullCharge = function() return nil end
+
+            battery.create()
+            local menu = battery.buildMenu()
+
+            -- Find caffeine entry
+            local foundCaffeine = false
+            for _, item in ipairs(menu) do
+                if item.title and item.title:match("Caffeine") then
+                    foundCaffeine = true
+                    assert.truthy(item.title:match("preventing sleep"))
+                end
+            end
+            assert.is_true(foundCaffeine)
         end)
     end)
 

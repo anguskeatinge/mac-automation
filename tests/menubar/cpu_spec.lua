@@ -104,7 +104,7 @@ user    1234  12.3   1.5   1000   500  ??  S     1:00PM   0:30.00 /usr/bin/proce
             local menu = cpu.buildMenu()
 
             assert.is_true(#menu >= 1)
-            assert.are.equal("Top Processes by CPU", menu[1].title)
+            assert.are.equal("Top Apps by CPU", menu[1].title)
         end)
 
         it("includes process entries with kill submenu", function()
@@ -117,7 +117,7 @@ user    1234  12.3   1.5   1000   500  ??  S     1:00PM   0:30.00 /usr/bin/proce
             cpu.create()
             local menu = cpu.buildMenu()
 
-            -- Find the process entry (should have a submenu)
+            -- Find a process entry (should have a submenu)
             local foundProcess = false
             for _, item in ipairs(menu) do
                 if item.menu then
@@ -126,6 +126,36 @@ user    1234  12.3   1.5   1000   500  ??  S     1:00PM   0:30.00 /usr/bin/proce
                 end
             end
             assert.is_true(foundProcess)
+        end)
+
+        it("groups processes by app name", function()
+            cpu._deps.executeCommand = function(cmd)
+                return [[
+user    1234  10.0   1.5   1000   500  ??  S     1:00PM   0:30.00 /Applications/VS Code.app/Contents/MacOS/Code
+user    1235   5.0   0.5   1000   500  ??  S     1:00PM   0:30.00 /Applications/VS Code.app/Contents/MacOS/Code Helper
+user    5678   3.0   1.0   1000   500  ??  S     1:00PM   0:30.00 /usr/bin/python3
+]]
+            end
+
+            cpu.create()
+            local menu = cpu.buildMenu()
+
+            -- Find VS Code group header
+            local foundVSCode = false
+            local foundPython = false
+            for _, item in ipairs(menu) do
+                if item.title and item.title:match("VS Code") and item.title:match("%%") then
+                    foundVSCode = true
+                    -- Should show total CPU and count
+                    assert.truthy(item.title:match("15%.0%%"))  -- 10 + 5 = 15%
+                    assert.truthy(item.title:match("%(2%)"))    -- 2 processes
+                end
+                if item.title and item.title:match("python3") then
+                    foundPython = true
+                end
+            end
+            assert.is_true(foundVSCode)
+            assert.is_true(foundPython)
         end)
     end)
 
