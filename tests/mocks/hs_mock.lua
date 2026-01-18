@@ -1,5 +1,6 @@
 -- Hammerspoon API Mock for testing
--- This module provides mock implementations of hs.window, hs.screen, hs.hotkey, and hs.alert
+-- This module provides mock implementations of hs.window, hs.screen, hs.hotkey, hs.alert,
+-- and system stats APIs (host, battery, caffeinate, menubar, timer, fs, pasteboard, notify)
 
 local M = {}
 
@@ -9,6 +10,19 @@ M._state = {
     screens = {},
     hotkeys = {},
     lastSetFrame = nil,
+    -- System stats state
+    cpuTicks = { overall = { user = 100, system = 50, nice = 10, idle = 840, active = 160 }, n = 8 },
+    vmStat = { pageSize = 4096, pagesWiredDown = 500000, pagesActive = 1000000, pagesInactive = 300000, pagesFree = 200000 },
+    batteryPercentage = 75,
+    batteryTimeRemaining = 180,
+    caffeineState = {},
+    menubars = {},
+    timers = {},
+    volumeInfo = { ["/"] = { NSURLVolumeTotalCapacityKey = 500000000000, NSURLVolumeAvailableCapacityKey = 150000000000 } },
+    pasteboardWatchers = {},
+    pasteboardContents = "",
+    notifications = {},
+    executeResults = {},
 }
 
 -- Reset all state between tests
@@ -18,6 +32,19 @@ function M.reset()
         screens = {},
         hotkeys = {},
         lastSetFrame = nil,
+        -- System stats state
+        cpuTicks = { overall = { user = 100, system = 50, nice = 10, idle = 840, active = 160 }, n = 8 },
+        vmStat = { pageSize = 4096, pagesWiredDown = 500000, pagesActive = 1000000, pagesInactive = 300000, pagesFree = 200000 },
+        batteryPercentage = 75,
+        batteryTimeRemaining = 180,
+        caffeineState = {},
+        menubars = {},
+        timers = {},
+        volumeInfo = { ["/"] = { NSURLVolumeTotalCapacityKey = 500000000000, NSURLVolumeAvailableCapacityKey = 150000000000 } },
+        pasteboardWatchers = {},
+        pasteboardContents = "",
+        notifications = {},
+        executeResults = {},
     }
 end
 
@@ -173,6 +200,306 @@ M.alert = {}
 
 function M.alert.show(message)
     -- No-op for tests
+end
+
+------------------------------------------------------
+-- hs.host module
+------------------------------------------------------
+
+M.host = {}
+
+function M.host.cpuUsageTicks()
+    return M._state.cpuTicks
+end
+
+function M.host.vmStat()
+    return M._state.vmStat
+end
+
+-- Test helpers for host
+function M.setCpuTicks(ticks)
+    M._state.cpuTicks = ticks
+end
+
+function M.setVmStat(stats)
+    M._state.vmStat = stats
+end
+
+------------------------------------------------------
+-- hs.battery module
+------------------------------------------------------
+
+M.battery = {}
+
+function M.battery.percentage()
+    return M._state.batteryPercentage
+end
+
+function M.battery.timeRemaining()
+    return M._state.batteryTimeRemaining
+end
+
+-- Test helpers for battery
+function M.setBatteryPercentage(pct)
+    M._state.batteryPercentage = pct
+end
+
+function M.setBatteryTimeRemaining(minutes)
+    M._state.batteryTimeRemaining = minutes
+end
+
+------------------------------------------------------
+-- hs.caffeinate module
+------------------------------------------------------
+
+M.caffeinate = {}
+
+function M.caffeinate.set(sleepType, value, keepActive)
+    M._state.caffeineState[sleepType] = value
+end
+
+function M.caffeinate.get(sleepType)
+    return M._state.caffeineState[sleepType] or false
+end
+
+-- Test helper
+function M.getCaffeineState()
+    return M._state.caffeineState
+end
+
+------------------------------------------------------
+-- hs.menubar module
+------------------------------------------------------
+
+M.menubar = {}
+
+local function createMockMenubar()
+    local mb = {
+        _title = "",
+        _menu = nil,
+        _deleted = false,
+    }
+
+    function mb:setTitle(title)
+        self._title = title
+    end
+
+    function mb:title()
+        return self._title
+    end
+
+    function mb:setMenu(menuTable)
+        self._menu = menuTable
+    end
+
+    function mb:menu()
+        return self._menu
+    end
+
+    function mb:delete()
+        self._deleted = true
+    end
+
+    table.insert(M._state.menubars, mb)
+    return mb
+end
+
+function M.menubar.new()
+    return createMockMenubar()
+end
+
+-- Test helper
+function M.getMenubars()
+    return M._state.menubars
+end
+
+------------------------------------------------------
+-- hs.timer module
+------------------------------------------------------
+
+M.timer = {}
+
+local function createMockTimer(interval, fn)
+    local t = {
+        _interval = interval,
+        _fn = fn,
+        _running = true,
+    }
+
+    function t:stop()
+        self._running = false
+    end
+
+    function t:start()
+        self._running = true
+    end
+
+    function t:fire()
+        if self._fn then
+            self._fn()
+        end
+    end
+
+    table.insert(M._state.timers, t)
+    return t
+end
+
+function M.timer.doEvery(interval, fn)
+    return createMockTimer(interval, fn)
+end
+
+function M.timer.doAfter(delay, fn)
+    return createMockTimer(delay, fn)
+end
+
+-- Test helper
+function M.getTimers()
+    return M._state.timers
+end
+
+------------------------------------------------------
+-- hs.fs module
+------------------------------------------------------
+
+M.fs = {}
+M.fs.volume = {}
+
+function M.fs.volume.allVolumes(showHidden)
+    return M._state.volumeInfo
+end
+
+-- Test helper
+function M.setVolumeInfo(info)
+    M._state.volumeInfo = info
+end
+
+------------------------------------------------------
+-- hs.pasteboard module
+------------------------------------------------------
+
+M.pasteboard = {}
+M.pasteboard.watcher = {}
+
+local function createMockPasteboardWatcher(fn)
+    local w = {
+        _fn = fn,
+        _running = false,
+    }
+
+    function w:start()
+        self._running = true
+    end
+
+    function w:stop()
+        self._running = false
+    end
+
+    table.insert(M._state.pasteboardWatchers, w)
+    return w
+end
+
+function M.pasteboard.watcher.new(fn)
+    return createMockPasteboardWatcher(fn)
+end
+
+function M.pasteboard.setContents(text)
+    M._state.pasteboardContents = text
+end
+
+function M.pasteboard.getContents()
+    return M._state.pasteboardContents
+end
+
+-- Test helper
+function M.getPasteboardWatchers()
+    return M._state.pasteboardWatchers
+end
+
+function M.simulatePasteboardChange(text)
+    M._state.pasteboardContents = text
+    for _, w in ipairs(M._state.pasteboardWatchers) do
+        if w._running and w._fn then
+            w._fn(text)
+        end
+    end
+end
+
+------------------------------------------------------
+-- hs.notify module
+------------------------------------------------------
+
+M.notify = {}
+
+local function createMockNotification(attributes)
+    local n = {
+        _attributes = attributes or {},
+        _sent = false,
+    }
+
+    function n:title(t)
+        if t then
+            self._attributes.title = t
+            return self
+        end
+        return self._attributes.title
+    end
+
+    function n:informativeText(t)
+        if t then
+            self._attributes.informativeText = t
+            return self
+        end
+        return self._attributes.informativeText
+    end
+
+    function n:send()
+        self._sent = true
+        table.insert(M._state.notifications, self)
+        return self
+    end
+
+    return n
+end
+
+function M.notify.new(attributes)
+    return createMockNotification(attributes)
+end
+
+-- Test helper
+function M.getNotifications()
+    return M._state.notifications
+end
+
+------------------------------------------------------
+-- hs.eventtap module
+------------------------------------------------------
+
+M.eventtap = {}
+
+function M.eventtap.keyStroke(modifiers, key)
+    -- No-op for tests, but could track if needed
+end
+
+------------------------------------------------------
+-- hs.execute function
+------------------------------------------------------
+
+function M.execute(cmd, withPath)
+    local result = M._state.executeResults[cmd]
+    if result then
+        return result.output, result.status, result.type, result.rc
+    end
+    return "", false, "exit", 1
+end
+
+-- Test helper
+function M.setExecuteResult(cmd, output, status, resultType, rc)
+    M._state.executeResults[cmd] = {
+        output = output or "",
+        status = status ~= false,
+        type = resultType or "exit",
+        rc = rc or 0,
+    }
 end
 
 return M
