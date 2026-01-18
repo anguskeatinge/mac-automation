@@ -132,7 +132,7 @@ end
 -- Create and return menubar
 function M.create()
     M._state.menubar = hs.menubar.new()
-    M._state.menubar:setTitle("↓-- ↑--")
+    M._state.menubar:setTitle("↓--")  -- Compact: download only (width bug on notch Macs)
     M._state.menubar:setMenu(M.buildMenu)
     -- Keep extra reference to prevent GC
     M.menubar = M._state.menubar
@@ -168,8 +168,8 @@ function M.refresh()
     M._state.prevNetBytes = currNetBytes
     M._state.prevNetTime = currTime
 
-    -- Arrow format: ↓down ↑up
-    M._state.menubar:setTitle(string.format("↓%s ↑%s", netDown, netUp))
+    -- Compact: download only (width bug on notch Macs)
+    M._state.menubar:setTitle(string.format("↓%s", netDown))
 
     return netDown, netUp
 end

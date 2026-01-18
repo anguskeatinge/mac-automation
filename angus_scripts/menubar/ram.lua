@@ -87,7 +87,7 @@ end
 -- Create and return menubar
 function M.create()
     M._state.menubar = hs.menubar.new()
-    M._state.menubar:setTitle("▦ --")
+    M._state.menubar:setTitle("--")  -- Compact: no emoji (width bug on notch Macs)
     M._state.menubar:setMenu(M.buildMenu)
     -- Keep extra reference to prevent GC
     M.menubar = M._state.menubar
@@ -109,7 +109,8 @@ function M.refresh()
 
     local ram = M.formatRam(vmStats)
 
-    M._state.menubar:setTitle(string.format("▦ %s", ram))
+    -- Compact: just the value (no emoji - width bug on notch Macs)
+    M._state.menubar:setTitle(ram)
 
     return ram
 end

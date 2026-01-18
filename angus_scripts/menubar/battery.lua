@@ -140,7 +140,7 @@ end
 -- Create and return menubar
 function M.create()
     M._state.menubar = hs.menubar.new()
-    M._state.menubar:setTitle("\u{1F50B}--%")  -- 🔋
+    M._state.menubar:setTitle("--")  -- Compact: no emoji (width bug on notch Macs)
     M._state.menubar:setMenu(M.buildMenu)
     -- Keep extra reference to prevent GC
     M.menubar = M._state.menubar
@@ -152,14 +152,14 @@ function M.refresh()
     if not M._state.menubar then return end
 
     local batteryPct = M._deps.batteryPercentage()
-    local batteryTime = M._deps.batteryTimeRemaining()
 
+    -- Compact: number with % (no emoji - width bug on notch Macs)
     if batteryPct then
-        local display = M.formatBattery(batteryPct, batteryTime)
-        M._state.menubar:setTitle(display)
-        return display
+        M._state.menubar:setTitle(string.format("%d%%", math.floor(batteryPct)))
+        return batteryPct
     end
 
+    M._state.menubar:setTitle("--")
     return nil
 end
 

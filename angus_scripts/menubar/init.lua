@@ -104,9 +104,7 @@ function M.start()
     local refs = _G._hammerspoon_menubar_refs
 
     -- Create each one and immediately store in multiple places
-    refs.network = network.create()
-    network._persistent = refs.network  -- extra ref on module itself
-
+    -- Order: first = rightmost, last = leftmost
     refs.pomodoro = pomodoro.create()
     pomodoro._persistent = refs.pomodoro
 
@@ -118,6 +116,9 @@ function M.start()
 
     refs.cpu = cpu.create()
     cpu._persistent = refs.cpu
+
+    refs.network = network.create()
+    network._persistent = refs.network  -- leftmost
 
     -- Also store on M
     M._menubars = {
@@ -143,12 +144,12 @@ function M.start()
     -- Initial refresh
     M.refresh()
 
-    -- Force all menubars to (re)register with macOS
-    refs.network:returnToMenuBar()
+    -- Force all menubars to (re)register with macOS (same order as creation)
     refs.pomodoro:returnToMenuBar()
     refs.battery:returnToMenuBar()
     refs.ram:returnToMenuBar()
     refs.cpu:returnToMenuBar()
+    refs.network:returnToMenuBar()
 end
 
 -- Stop all menubars

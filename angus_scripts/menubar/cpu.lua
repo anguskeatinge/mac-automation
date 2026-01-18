@@ -101,7 +101,7 @@ end
 -- Create and return menubar
 function M.create()
     M._state.menubar = hs.menubar.new()
-    M._state.menubar:setTitle("⚙ --%")
+    M._state.menubar:setTitle("--")  -- Compact: no emoji (width bug on notch Macs)
     M._state.menubar:setMenu(M.buildMenu)
     -- Keep extra reference to prevent GC
     M.menubar = M._state.menubar
@@ -120,7 +120,8 @@ function M.refresh()
     local cpu = M.calculateCpuPercent(M._state.prevCpuTicks, currTicks)
     M._state.prevCpuTicks = currTicks
 
-    M._state.menubar:setTitle(string.format("⚙ %d%%", cpu))
+    -- Compact: number with % (no emoji - width bug on notch Macs)
+    M._state.menubar:setTitle(string.format("%d%%", cpu))
 
     return cpu
 end

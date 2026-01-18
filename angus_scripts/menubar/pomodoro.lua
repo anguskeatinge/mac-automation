@@ -140,7 +140,7 @@ end
 -- Create and return menubar
 function M.create()
     M._state.menubar = hs.menubar.new()
-    M._state.menubar:setTitle("\u{23F1}")
+    M._state.menubar:setTitle("P")  -- Compact: no emoji (width bug on notch Macs)
     M._state.menubar:setMenu(M.buildMenu)
     -- Keep extra reference to prevent GC
     M.menubar = M._state.menubar
@@ -165,7 +165,8 @@ function M.refresh()
     if M._state.pomodoroEndTime then
         local remaining = utils.getPomodoroSecondsRemaining(M._state.pomodoroEndTime, currTime)
         if remaining > 0 then
-            M._state.menubar:setTitle("\u{23F1}" .. utils.formatPomodoroTime(remaining))
+            -- Compact: just the time (no emoji - width bug on notch Macs)
+            M._state.menubar:setTitle(utils.formatPomodoroTime(remaining))
             return utils.formatPomodoroTime(remaining)
         else
             -- Timer finished
@@ -173,7 +174,8 @@ function M.refresh()
         end
     end
 
-    M._state.menubar:setTitle("\u{23F1}")
+    -- Compact: "P" when not running
+    M._state.menubar:setTitle("P")
     return nil
 end
 

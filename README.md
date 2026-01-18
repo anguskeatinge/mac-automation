@@ -77,6 +77,27 @@ Run all tests:
 busted tests/
 ```
 
+## CRITICAL: Menubar Width Bug (MacBooks with Notch)
+
+If menubar items appear intermittently or disappear, **check the title width first**.
+
+macOS miscalculates the width of certain characters (especially emoji and some Unicode),
+treating them as wider than they render. On MacBooks with a notch, this causes items
+to be "hidden" behind the notch even when they would visually fit.
+
+**Debugging this cost hours.** Before suspecting GC or other issues, always verify:
+1. Are titles using emoji or special Unicode? Try plain ASCII.
+2. Are titles long? Shorten them.
+3. Do items appear on initial load then vanish? Classic width miscalculation.
+
+**What works:**
+- Plain ASCII: `12`, `4G`, `P`
+- Simple arrows: `↓` seems OK
+
+**What breaks:**
+- Emoji: `⚙`, `🔋`, `⏱`, `▦`
+- Combined: `⚙ 12%`, `🔋85%`
+
 ## Hammerspoon Best Practices
 
 ### Preventing Garbage Collection
