@@ -263,29 +263,8 @@ function M.parsePsOutputWithCommand(output)
             -- For app name extraction, use the full command which includes spaces
             local appName = M.extractAppName(command)
 
-            -- Base name: get executable name from command
-            -- For paths like "/Applications/App.app/Contents/MacOS/Executable", get "Executable"
-            local baseName
-            if command:sub(1, 1) == "/" then
-                -- It's an absolute path - get last component
-                -- Find the last / and take everything after it (up to any space/argument)
-                local lastSlashPos = 0
-                for i = 1, #command do
-                    if command:sub(i, i) == "/" then
-                        lastSlashPos = i
-                    end
-                end
-                if lastSlashPos > 0 and lastSlashPos < #command then
-                    baseName = command:sub(lastSlashPos + 1)
-                    -- Take only the first word if there are arguments
-                    baseName = baseName:match("^(%S+)") or baseName
-                else
-                    baseName = command:match("([^/]+)$") or command
-                end
-            else
-                -- Not an absolute path - take first word
-                baseName = command:match("^(%S+)") or command
-            end
+            -- Base name: get executable name from command (last path component, no args)
+            local baseName = command:match(".*/([^/%s]+)") or command:match("^([^%s]+)") or command
 
             if pid and cpu and mem then
                 table.insert(processes, {

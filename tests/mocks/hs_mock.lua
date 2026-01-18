@@ -318,6 +318,7 @@ local function createMockMenubar()
         _title = "",
         _menu = nil,
         _deleted = false,
+        _inMenuBar = true,
     }
 
     function mb:setTitle(title)
@@ -338,6 +339,15 @@ local function createMockMenubar()
 
     function mb:delete()
         self._deleted = true
+        self._inMenuBar = false
+    end
+
+    function mb:returnToMenuBar()
+        self._inMenuBar = true
+    end
+
+    function mb:isInMenuBar()
+        return self._inMenuBar
     end
 
     table.insert(M._state.menubars, mb)

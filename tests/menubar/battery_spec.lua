@@ -118,6 +118,10 @@ describe("Battery Module", function()
         it("returns nil for negative input", function()
             assert.is_nil(battery.formatTime(-10))
         end)
+
+        it("returns nil for zero input", function()
+            assert.is_nil(battery.formatTime(0))
+        end)
     end)
 
     describe("buildMenu", function()

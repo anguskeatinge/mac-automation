@@ -107,27 +107,6 @@ user    1234  12.3   1.5   1000   500  ??  S     1:00PM   0:30.00 /usr/bin/proce
             assert.are.equal("Top Apps by CPU", menu[1].title)
         end)
 
-        it("includes process entries with kill submenu", function()
-            cpu._deps.executeCommand = function(cmd)
-                return [[
-user    1234  12.3   1.5   1000   500  ??  S     1:00PM   0:30.00 /usr/bin/process
-]]
-            end
-
-            cpu.create()
-            local menu = cpu.buildMenu()
-
-            -- Find a process entry (should have a submenu)
-            local foundProcess = false
-            for _, item in ipairs(menu) do
-                if item.menu then
-                    foundProcess = true
-                    assert.truthy(item.menu[1].title:match("Kill"))
-                end
-            end
-            assert.is_true(foundProcess)
-        end)
-
         it("groups processes by app name", function()
             cpu._deps.executeCommand = function(cmd)
                 return [[

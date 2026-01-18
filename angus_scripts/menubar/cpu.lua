@@ -43,12 +43,6 @@ function M.calculateCpuPercent(prevTicks, currTicks)
     return math.floor((usedDelta / totalDelta) * 100 + 0.5)
 end
 
--- Kill a process by PID
-function M.killProcess(pid)
-    M._deps.executeCommand(string.format("kill %d", pid))
-    hs.alert.show("Killed process " .. pid)
-end
-
 -- Build the dropdown menu showing top processes by CPU (grouped by app)
 function M.buildMenu()
     -- Get more processes (50) to allow for grouping
@@ -68,13 +62,11 @@ function M.buildMenu()
         groupCount = groupCount + 1
 
         if g.count == 1 then
-            -- Single process - show directly with kill option
+            -- Single process - show directly
             local p = g.processes[1]
             table.insert(menu, {
                 title = string.format("%-20s %5.1f%%", utils.truncateText(g.appName, 20), p.cpu),
-                menu = {
-                    { title = string.format("Kill PID %d", p.pid), fn = function() M.killProcess(p.pid) end }
-                }
+                disabled = true,
             })
         else
             -- Multiple processes - show group header then children
@@ -88,9 +80,7 @@ function M.buildMenu()
                 local prefix = (i == #g.processes) and "  └" or "  ├"
                 table.insert(menu, {
                     title = string.format("%s PID %-8d %5.1f%%", prefix, p.pid, p.cpu),
-                    menu = {
-                        { title = string.format("Kill PID %d", p.pid), fn = function() M.killProcess(p.pid) end }
-                    }
+                    disabled = true,
                 })
             end
         end

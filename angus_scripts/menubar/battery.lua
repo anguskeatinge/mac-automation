@@ -47,9 +47,9 @@ function M.toggleCaffeine()
     M._deps.caffeinateSet("systemIdle", M._state.caffeineEnabled)
 end
 
--- Format time as hours and minutes
+-- Format time as hours and minutes (returns nil for invalid/zero values)
 function M.formatTime(minutes)
-    if not minutes or minutes < 0 then
+    if not minutes or minutes <= 0 then
         return nil
     end
     local hours = math.floor(minutes / 60)

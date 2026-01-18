@@ -26,12 +26,6 @@ function M.formatRam(vmStats, pageSize)
     return utils.formatBytes(usedBytes)
 end
 
--- Kill a process by PID
-function M.killProcess(pid)
-    M._deps.executeCommand(string.format("kill %d", pid))
-    hs.alert.show("Killed process " .. pid)
-end
-
 -- Build the dropdown menu showing top processes by memory (grouped by app)
 function M.buildMenu()
     -- Get more processes (50) to allow for grouping
@@ -53,13 +47,11 @@ function M.buildMenu()
         local totalMemStr = utils.formatBytes((g.totalRss or 0) * 1024)
 
         if g.count == 1 then
-            -- Single process - show directly with kill option
+            -- Single process - show directly
             local p = g.processes[1]
             table.insert(menu, {
                 title = string.format("%-20s %6s", utils.truncateText(g.appName, 20), totalMemStr),
-                menu = {
-                    { title = string.format("Kill PID %d", p.pid), fn = function() M.killProcess(p.pid) end }
-                }
+                disabled = true,
             })
         else
             -- Multiple processes - show group header then children
@@ -74,9 +66,7 @@ function M.buildMenu()
                 local memStr = utils.formatBytes((p.rss or 0) * 1024)
                 table.insert(menu, {
                     title = string.format("%s PID %-8d %6s", prefix, p.pid, memStr),
-                    menu = {
-                        { title = string.format("Kill PID %d", p.pid), fn = function() M.killProcess(p.pid) end }
-                    }
+                    disabled = true,
                 })
             end
         end

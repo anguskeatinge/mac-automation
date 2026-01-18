@@ -21,31 +21,36 @@ M._state = {
     history = {},  -- Rolling history: {bytesIn, bytesOut, time}
 }
 
--- Parse netstat -ib output to get bytes in/out for en0
+-- Parse netstat -ib output to get bytes in/out for primary interface
+-- Checks en0, en1, en2 in order (covers most Mac configurations)
 function M.parseNetstat(output)
     if not output or output == "" then
         return nil
     end
 
-    local bytesIn, bytesOut = 0, 0
+    local interfaces = {"en0", "en1", "en2"}
 
-    for line in output:gmatch("[^\n]+") do
-        -- Look for en0 with Link# (the hardware interface line)
-        if line:match("^en0%s") and line:match("<Link#") then
-            local fields = {}
-            for field in line:gmatch("%S+") do
-                table.insert(fields, field)
+    for _, iface in ipairs(interfaces) do
+        local pattern = "^" .. iface .. "%s"
+        for line in output:gmatch("[^\n]+") do
+            if line:match(pattern) and line:match("<Link#") then
+                local fields = {}
+                for field in line:gmatch("%S+") do
+                    table.insert(fields, field)
+                end
+                -- Ibytes is typically column 7, Obytes is column 10
+                if #fields >= 10 then
+                    local bytesIn = tonumber(fields[7]) or 0
+                    local bytesOut = tonumber(fields[10]) or 0
+                    if bytesIn > 0 or bytesOut > 0 then
+                        return { bytesIn = bytesIn, bytesOut = bytesOut }
+                    end
+                end
             end
-            -- Ibytes is typically column 7, Obytes is column 10
-            if #fields >= 10 then
-                bytesIn = tonumber(fields[7]) or 0
-                bytesOut = tonumber(fields[10]) or 0
-            end
-            break
         end
     end
 
-    return { bytesIn = bytesIn, bytesOut = bytesOut }
+    return { bytesIn = 0, bytesOut = 0 }
 end
 
 -- Format network speed as download/upload rates

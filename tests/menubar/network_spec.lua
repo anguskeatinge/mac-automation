@@ -33,7 +33,7 @@ en1   1500  <Link#5>                             0     0          0        0    
             assert.is_nil(network.parseNetstat(nil))
         end)
 
-        it("returns zeros if en0 not found", function()
+        it("returns zeros if no interface found", function()
             local output = [[
 Name  Mtu   Network       Address            Ipkts Ierrs     Ibytes    Opkts Oerrs     Obytes  Coll
 lo0   16384 <Link#1>                        123456     0   12345678    98765     0    9876543     0
@@ -42,6 +42,18 @@ lo0   16384 <Link#1>                        123456     0   12345678    98765    
             assert.is_not_nil(result)
             assert.are.equal(0, result.bytesIn)
             assert.are.equal(0, result.bytesOut)
+        end)
+
+        it("falls back to en1 when en0 has no traffic", function()
+            local output = [[
+Name  Mtu   Network       Address            Ipkts Ierrs     Ibytes    Opkts Oerrs     Obytes  Coll
+en0   1500  <Link#4>      aa:bb:cc:dd:ee:ff      0     0          0        0     0          0     0
+en1   1500  <Link#5>      bb:cc:dd:ee:ff:00 234567     0 1234567890   345678     0  987654321     0
+]]
+            local result = network.parseNetstat(output)
+            assert.is_not_nil(result)
+            assert.are.equal(1234567890, result.bytesIn)
+            assert.are.equal(987654321, result.bytesOut)
         end)
     end)
 

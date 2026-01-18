@@ -98,13 +98,11 @@ user    1234  1.5   12.3   1000   524288  ??  S     1:00PM   0:30.00 /usr/bin/pr
             ram.create()
             local menu = ram.buildMenu()
 
-            -- Find the process entry
+            -- Find the process entry with memory display (524288 KB = 512 MB)
             local foundProcess = false
             for _, item in ipairs(menu) do
-                if item.menu then
+                if item.title and item.title:match("512M") then
                     foundProcess = true
-                    -- 524288 KB = 512 MB
-                    assert.truthy(item.title:match("512M"))
                 end
             end
             assert.is_true(foundProcess)

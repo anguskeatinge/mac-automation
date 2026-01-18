@@ -13,6 +13,7 @@ local pomodoro = require("angus_scripts.menubar.pomodoro")
 -- State
 M._state = {
     refreshTimer = nil,
+    recoveryCount = 0,  -- Track how often menubars need recovery
 }
 
 -- Expose submodules for direct access if needed
@@ -26,47 +27,48 @@ M.pomodoro = pomodoro
 -- See: https://github.com/asmagill/hammerspoon/wiki/Variable-Scope-and-Garbage-Collection
 -- Initialized fresh in start() to avoid stale references on reload
 
--- Check and recover missing menubars
+-- Check and recover missing menubars (indicates GC collected them)
 local function recoverMissingMenubars()
-    local recovered = false
+    local missing = {}
     local mb
 
     if not cpu._state.menubar then
-        print("[menubar] CPU menubar was nil, recreating")
         mb = cpu.create()
         _G._hammerspoon_menubar_refs.cpu = mb
-        recovered = true
+        table.insert(missing, "cpu")
     end
 
     if not ram._state.menubar then
-        print("[menubar] RAM menubar was nil, recreating")
         mb = ram.create()
         _G._hammerspoon_menubar_refs.ram = mb
-        recovered = true
+        table.insert(missing, "ram")
     end
 
     if not network._state.menubar then
-        print("[menubar] Network menubar was nil, recreating")
         mb = network.create()
         _G._hammerspoon_menubar_refs.network = mb
-        recovered = true
+        table.insert(missing, "network")
     end
 
     if not battery._state.menubar then
-        print("[menubar] Battery menubar was nil, recreating")
         mb = battery.create()
         _G._hammerspoon_menubar_refs.battery = mb
-        recovered = true
+        table.insert(missing, "battery")
     end
 
     if not pomodoro._state.menubar then
-        print("[menubar] Pomodoro menubar was nil, recreating")
         mb = pomodoro.create()
         _G._hammerspoon_menubar_refs.pomodoro = mb
-        recovered = true
+        table.insert(missing, "pomodoro")
     end
 
-    return recovered
+    if #missing > 0 then
+        M._state.recoveryCount = M._state.recoveryCount + 1
+        print(string.format("[menubar] Recovery #%d: recreated %s",
+            M._state.recoveryCount, table.concat(missing, ", ")))
+    end
+
+    return #missing > 0
 end
 
 -- Refresh all menubar displays with per-module error logging
@@ -147,14 +149,6 @@ function M.start()
     refs.battery:returnToMenuBar()
     refs.ram:returnToMenuBar()
     refs.cpu:returnToMenuBar()
-
-    -- Print debug info
-    print("[menubar] Created menubars:")
-    for k, v in pairs(refs) do
-        if type(v) == "userdata" and v.title then
-            print(string.format("  %s: %s inMenuBar=%s", k, tostring(v), tostring(v:isInMenuBar())))
-        end
-    end
 end
 
 -- Stop all menubars
@@ -174,6 +168,7 @@ end
 -- Reset for testing
 function M.reset()
     M.stop()
+    M._state.recoveryCount = 0
     cpu.reset()
     ram.reset()
     network.reset()
