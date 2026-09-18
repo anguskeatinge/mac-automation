@@ -1,0 +1,477 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="color-scheme" content="dark">
+  <title>Launcher</title>
+  <style>
+    :root {
+      --glass: rgba(22, 16, 13, 0.78);
+      --text: #f4f1ec;
+      --muted: rgba(244, 241, 236, 0.46);
+      --faint: rgba(244, 241, 236, 0.28);
+      --copper: #e3a46c;
+      --line: rgba(227, 164, 108, 0.28);
+      --row: rgba(255, 236, 214, 0.045);
+      --row-on: rgba(227, 164, 108, 0.16);
+      --font: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", sans-serif;
+      --mono: "SF Mono", ui-monospace, Menlo, monospace;
+    }
+
+    * { box-sizing: border-box; }
+
+    html, body {
+      margin: 0;
+      width: 100%;
+      height: 100%;
+      background: transparent;
+      color: var(--text);
+      font-family: var(--font);
+      -webkit-font-smoothing: antialiased;
+      overflow: hidden;
+      user-select: none;
+    }
+
+    #shell {
+      position: relative;
+      width: 100%;
+      height: 100%;
+      background:
+        radial-gradient(ellipse 70% 42% at 50% 20%, rgba(20, 12, 8, 0.08), rgba(8, 5, 4, 0.42));
+    }
+
+    #card {
+      position: absolute;
+      top: 17vh;
+      left: 50%;
+      width: min(580px, calc(100vw - 48px));
+      padding: 16px 16px 10px;
+      border-radius: 22px;
+      background:
+        linear-gradient(180deg, rgba(255, 232, 208, 0.07), transparent 28%),
+        var(--glass);
+      -webkit-backdrop-filter: blur(42px) saturate(155%);
+      backdrop-filter: blur(42px) saturate(155%);
+      box-shadow:
+        0 30px 80px rgba(0, 0, 0, 0.48),
+        0 0 0 1px var(--line),
+        inset 0 1px 0 rgba(255, 244, 230, 0.16);
+      transform: translateX(-50%);
+      overflow: hidden;
+    }
+
+    #card::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+      opacity: 0.055;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='140' height='140' filter='url(%23n)' opacity='.85'/%3E%3C/svg%3E");
+    }
+
+    .search {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      height: 52px;
+      padding: 0 8px 0 6px;
+      position: relative;
+    }
+
+    .search::after {
+      content: "";
+      position: absolute;
+      left: 10px;
+      right: 10px;
+      bottom: -2px;
+      height: 1px;
+      background: linear-gradient(90deg, transparent, var(--line), transparent);
+    }
+
+    .mark {
+      width: 22px;
+      height: 22px;
+      flex: 0 0 22px;
+      color: var(--copper);
+    }
+
+    .mark svg {
+      display: block;
+      width: 100%;
+      height: 100%;
+    }
+
+    #q {
+      flex: 1;
+      min-width: 0;
+      border: 0;
+      outline: none;
+      background: transparent;
+      -webkit-appearance: none;
+      appearance: none;
+      color: var(--text);
+      font-family: inherit;
+      font-weight: 500;
+      font-size: 22px;
+      letter-spacing: -0.02em;
+      caret-color: var(--copper);
+      user-select: text;
+    }
+
+    #q::placeholder {
+      color: var(--muted);
+      font-style: normal;
+      font-weight: 500;
+    }
+
+    #results {
+      margin-top: 12px;
+      max-height: min(52vh, 480px);
+      overflow-y: auto;
+    }
+
+    #results[hidden], #empty[hidden] { display: none; }
+
+    .section + .section { margin-top: 6px; }
+
+    .section-title {
+      padding: 8px 10px 4px;
+      color: var(--faint);
+      font-size: 10px;
+      font-weight: 600;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+    }
+
+    .row {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      height: 44px;
+      padding: 0 10px 0 8px;
+      border-radius: 12px;
+      cursor: pointer;
+    }
+
+    .row.is-on { background: var(--row-on); }
+
+    .icon {
+      width: 28px;
+      height: 28px;
+      object-fit: contain;
+    }
+
+    .icon-fallback {
+      width: 28px;
+      height: 28px;
+      border-radius: 7px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: rgba(227, 164, 108, 0.14);
+      color: var(--copper);
+      font-size: 13px;
+      font-weight: 600;
+    }
+
+    .row-name {
+      flex: 1;
+      min-width: 0;
+      font-size: 15px;
+      font-weight: 500;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .key {
+      min-width: 22px;
+      height: 18px;
+      padding: 0 6px;
+      border-radius: 5px;
+      border: 1px solid rgba(227, 164, 108, 0.32);
+      background: rgba(8, 6, 5, 0.35);
+      color: var(--copper);
+      font-family: var(--mono);
+      font-size: 10px;
+      font-weight: 500;
+      letter-spacing: 0.08em;
+      line-height: 16px;
+      text-transform: uppercase;
+      text-align: center;
+    }
+
+    .section-empty {
+      padding: 2px 10px 8px;
+      color: var(--faint);
+      font-size: 12px;
+    }
+
+    #empty {
+      margin: 22px 8px 10px;
+      text-align: center;
+      color: var(--muted);
+      font-size: 14px;
+    }
+
+    .foot {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-top: 10px;
+      padding: 4px 8px 2px;
+      color: var(--faint);
+      font-family: var(--mono);
+      font-size: 9px;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+    }
+
+    #results::-webkit-scrollbar { width: 8px; }
+    #results::-webkit-scrollbar-thumb {
+      background: rgba(227, 164, 108, 0.28);
+      border-radius: 8px;
+    }
+
+  </style>
+</head>
+<body>
+  <div id="shell">
+    <div id="card">
+      <div class="search">
+        <div class="mark" aria-hidden="true">
+          <svg viewBox="0 0 16 16" fill="currentColor">
+            <rect x="1.2" y="1.2" width="5.8" height="5.8" rx="1.4"/>
+            <rect x="9" y="1.2" width="5.8" height="5.8" rx="1.4"/>
+            <rect x="1.2" y="9" width="5.8" height="5.8" rx="1.4"/>
+            <rect x="9" y="9" width="5.8" height="5.8" rx="1.4" opacity="0.42"/>
+          </svg>
+        </div>
+        <input id="q" type="text" placeholder="Launch" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" enterkeyhint="go" autofocus>
+      </div>
+      <div id="results"></div>
+      <div id="empty" hidden>No matching apps</div>
+      <div class="foot">
+        <span id="hint-left">t  c  s  sp</span>
+        <span id="hint-right">type to filter</span>
+      </div>
+    </div>
+  </div>
+  <script>
+    const q = document.getElementById("q");
+    const card = document.getElementById("card");
+    const results = document.getElementById("results");
+    const empty = document.getElementById("empty");
+    const hintLeft = document.getElementById("hint-left");
+    const hintRight = document.getElementById("hint-right");
+
+    let items = [];
+    let selected = 0;
+    let ready = false;
+    let pending = null;
+
+    function post(payload) {
+      try {
+        webkit.messageHandlers.launcherBridge.postMessage(payload);
+      } catch (err) {}
+    }
+
+    function esc(value) {
+      return String(value == null ? "" : value).replace(/[&<>"']/g, function (ch) {
+        return ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[ch];
+      });
+    }
+
+    function flatten(groups) {
+      const flat = [];
+      (groups || []).forEach(function (group) {
+        (group.items || []).forEach(function (item) {
+          flat.push(item);
+        });
+      });
+      return flat;
+    }
+
+    function iconHTML(item) {
+      const name = item.displayName || item.name || "?";
+      if (item.icon) {
+        return '<img class="icon" alt="" src="' + item.icon + '">';
+      }
+      return '<div class="icon-fallback">' + esc(name.charAt(0)) + "</div>";
+    }
+
+    function keyHTML(item) {
+      if (!item.alias) return "";
+      return '<span class="key">' + esc(item.alias) + "</span>";
+    }
+
+    function render(groups, catalogReady) {
+      const sectionList = groups || [];
+      const hasItems = items.length > 0;
+      results.hidden = sectionList.length === 0;
+      empty.hidden = sectionList.length > 0;
+      if (sectionList.length === 0) {
+        empty.textContent = q.value ? "Nothing for “" + q.value + "”" : "No matching apps";
+        hintLeft.textContent = "no match";
+        hintRight.textContent = "esc dismiss";
+        return;
+      }
+
+      let index = 0;
+      results.innerHTML = sectionList.map(function (group) {
+        const groupItems = group.items || [];
+        let body = groupItems.map(function (item) {
+          const i = index++;
+          return '<div class="row' + (i === selected ? " is-on" : "") + '" data-i="' + i + '">' +
+            iconHTML(item) +
+            '<span class="row-name">' + esc(item.displayName || item.name) + "</span>" +
+            keyHTML(item) +
+            "</div>";
+        }).join("");
+        if (!body) {
+          const waiting = group.id === "rest" && !catalogReady;
+          body = '<div class="section-empty">' + (waiting ? "Loading…" : "None") + "</div>";
+        }
+        return '<div class="section"><div class="section-title">' + esc(group.title) + "</div>" + body + "</div>";
+      }).join("");
+
+      hintLeft.textContent = items.length + (items.length === 1 ? " app" : " apps");
+      hintRight.textContent = "↵ open   esc dismiss";
+      scrollSelected();
+    }
+
+    function scrollSelected() {
+      const node = results.querySelector('.row[data-i="' + selected + '"]');
+      if (node && node.scrollIntoView) {
+        node.scrollIntoView({ block: "nearest" });
+      }
+    }
+
+    function paintSelection() {
+      results.querySelectorAll("[data-i]").forEach(function (node) {
+        node.classList.toggle("is-on", Number(node.getAttribute("data-i")) === selected);
+      });
+      scrollSelected();
+    }
+
+    function move(delta) {
+      if (!items.length) return;
+      selected = (selected + delta + items.length) % items.length;
+      paintSelection();
+    }
+
+    function choose() {
+      if (!items.length) return;
+      post({ type: "select", index: selected + 1 });
+    }
+
+    function apply(state) {
+      if (!state) return;
+      const previous = items[selected];
+      const groups = state.groups || [];
+      items = flatten(groups);
+      if (state.resetQuery) {
+        q.value = state.query || "";
+        selected = 0;
+      } else if (state.keepSelection && previous) {
+        const idx = items.findIndex(function (item) {
+          return item.bundleID === previous.bundleID && item.action === previous.action;
+        });
+        selected = idx >= 0 ? idx : 0;
+      } else {
+        selected = 0;
+      }
+      if (selected >= items.length) selected = 0;
+      render(groups, state.catalogReady);
+    }
+
+    window.__setState = function (state) {
+      if (!ready) {
+        pending = state;
+        return;
+      }
+      apply(state);
+    };
+
+    window.__focus = function () {
+      q.focus();
+      const value = q.value;
+      q.setSelectionRange(value.length, value.length);
+    };
+
+    q.addEventListener("input", function () {
+      post({ type: "query", query: q.value });
+    });
+
+    document.addEventListener("keydown", function (event) {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        post({ type: "dismiss" });
+        return;
+      }
+      if (event.key === "Enter") {
+        event.preventDefault();
+        choose();
+        return;
+      }
+      if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+        event.preventDefault();
+        move(event.key === "ArrowDown" ? 1 : -1);
+        return;
+      }
+      if (event.key === "Tab") {
+        event.preventDefault();
+        move(event.shiftKey ? -1 : 1);
+      }
+    });
+
+    document.getElementById("shell").addEventListener("mousedown", function (event) {
+      if (event.target.id === "shell") {
+        post({ type: "dismiss" });
+      }
+    });
+
+    results.addEventListener("mousedown", function (event) {
+      event.preventDefault();
+    });
+    results.addEventListener("click", function (event) {
+      const target = event.target.closest("[data-i]");
+      if (!target) return;
+      selected = Number(target.getAttribute("data-i"));
+      choose();
+    });
+
+    ready = true;
+    if (pending) {
+      apply(pending);
+      pending = null;
+    }
+
+    if (typeof webkit === "undefined" || !webkit.messageHandlers) {
+      apply({
+        resetQuery: true,
+        catalogReady: true,
+        groups: [
+          {
+            title: "Shortlist",
+            items: [
+              { name: "iTerm", displayName: "iTerm", alias: "t" },
+              { name: "Google Chrome", displayName: "Chrome", alias: "c" },
+              { name: "Slack", displayName: "Slack", alias: "s" },
+              { name: "Spotlight", displayName: "Spotlight", alias: "sp" }
+            ]
+          },
+          {
+            title: "Open",
+            items: [{ name: "Safari", displayName: "Safari" }]
+          },
+          {
+            title: "Apps",
+            items: [{ name: "TextEdit", displayName: "TextEdit" }]
+          }
+        ]
+      });
+    }
+  </script>
+</body>
+</html>
