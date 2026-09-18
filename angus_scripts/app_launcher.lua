@@ -1,21 +1,34 @@
 -- Minimal Cmd+Space app launcher
--- Hard aliases beat fuzzy name matching so "te" is always iTerm, never Terminal.
+-- Hard aliases beat fuzzy name matching so "t" / "te" is always iTerm, never Terminal.
 
 local hs = hs or require("tests.mocks.hs_mock")
 
 local M = {}
 
-M.aliases = {
-    ch = { name = "Google Chrome", bundleID = "com.google.Chrome" },
-    chr = { name = "Google Chrome", bundleID = "com.google.Chrome" },
-    chrome = { name = "Google Chrome", bundleID = "com.google.Chrome" },
-    te = { name = "iTerm", bundleID = "com.googlecode.iterm2" },
-    it = { name = "iTerm", bundleID = "com.googlecode.iterm2" },
-    term = { name = "iTerm", bundleID = "com.googlecode.iterm2" },
-    iterm = { name = "iTerm", bundleID = "com.googlecode.iterm2" },
-    sp = { name = "Spotlight", action = "spotlight", bundleID = "com.apple.Spotlight" },
-    spotlight = { name = "Spotlight", action = "spotlight", bundleID = "com.apple.Spotlight" },
-}
+-- Typing any prefix of a stem resolves to that app (c/ch/chrome, t/term/iterm, s/slack).
+-- minPrefix avoids collisions: "s" is Slack, Spotlight starts at "sp".
+local chrome = { name = "Google Chrome", bundleID = "com.google.Chrome", pin = "c" }
+local iterm = { name = "iTerm", bundleID = "com.googlecode.iterm2", pin = "t" }
+local slack = { name = "Slack", bundleID = "com.tinyspeck.slackmacgap", pin = "s" }
+local spotlight = { name = "Spotlight", action = "spotlight", bundleID = "com.apple.Spotlight", pin = "sp" }
+
+M.pinnedAliases = { "c", "t", "s", "sp" }
+M.aliases = {}
+
+local function addStem(target, word, minPrefix)
+    for i = minPrefix or 1, #word do
+        local key = word:sub(1, i)
+        if not M.aliases[key] then
+            M.aliases[key] = target
+        end
+    end
+end
+
+addStem(chrome, "chrome")
+addStem(iterm, "term")
+addStem(iterm, "iterm", 2)
+addStem(slack, "slack")
+addStem(spotlight, "spotlight", 2)
 
 M.terminalBundleID = "com.apple.Terminal"
 
@@ -87,7 +100,7 @@ local function isTerminal(app)
     return app.bundleID == M.terminalBundleID
 end
 
--- Terminal only appears if you type the full word. "te" / "term" stay iTerm.
+-- Terminal only appears if you type the full word. "t" / "te" / "term" stay iTerm.
 function M.allowsApp(app, query)
     if isTerminal(app) then
         return M.normalizeQuery(query) == "terminal"
@@ -133,9 +146,9 @@ function M.scoreApp(app, query)
 end
 
 local function aliasForBundle(bundleID)
-    for key, alias in pairs(M.aliases) do
+    for _, alias in pairs(M.aliases) do
         if alias.bundleID == bundleID then
-            return key
+            return alias.pin
         end
     end
     return nil
@@ -148,7 +161,7 @@ function M.rankApps(apps, query)
 
     if q == "" then
         local seen = {}
-        for _, key in ipairs({ "ch", "te", "sp" }) do
+        for _, key in ipairs(M.pinnedAliases) do
             local pinned = M.aliases[key]
             local seenKey = pinned.bundleID or pinned.action
             if pinned and not seen[seenKey] then
@@ -433,7 +446,7 @@ function M.start()
         M.runChoice(choice)
     end)
 
-    M._state.chooser:placeholderText("ch chrome · te iTerm · sp Spotlight")
+    M._state.chooser:placeholderText("c chrome · t iTerm · s Slack · sp Spotlight")
     M._state.chooser:searchSubText(false)
     M._state.chooser:rows(6)
     M._state.chooser:width(24)

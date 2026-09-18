@@ -12,6 +12,8 @@ local apps = {
     { name = "TextEdit", bundleID = "com.apple.TextEdit" },
     { name = "Telegram", bundleID = "ru.keepcoder.Telegram" },
     { name = "Chess", bundleID = "com.apple.Chess" },
+    { name = "Slack", bundleID = "com.tinyspeck.slackmacgap" },
+    { name = "Safari", bundleID = "com.apple.Safari" },
 }
 
 describe("App launcher", function()
@@ -20,24 +22,39 @@ describe("App launcher", function()
         launcher.reset()
     end)
 
-    it("maps ch to Chrome", function()
-        local alias = launcher.resolveAlias("ch")
-        assert.are.equal("com.google.Chrome", alias.bundleID)
+    it("maps every Chrome prefix from c through chrome", function()
+        for _, query in ipairs({ "c", "C", "ch", "chr", "chro", "chrom", "chrome" }) do
+            local alias = launcher.resolveAlias(query)
+            assert.are.equal("com.google.Chrome", alias.bundleID)
+        end
     end)
 
-    it("maps te to iTerm", function()
-        local alias = launcher.resolveAlias("TE")
-        assert.are.equal("com.googlecode.iterm2", alias.bundleID)
+    it("maps every iTerm prefix from t through term and iterm", function()
+        for _, query in ipairs({ "t", "TE", "ter", "term", "it", "ite", "iter", "iterm" }) do
+            local alias = launcher.resolveAlias(query)
+            assert.are.equal("com.googlecode.iterm2", alias.bundleID)
+        end
     end)
 
-    it("puts Chrome first for ch even when Chess exists", function()
-        local ranked = launcher.rankApps(apps, "ch")
+    it("maps every Slack prefix from s through slack", function()
+        for _, query in ipairs({ "s", "sl", "sla", "slac", "slack" }) do
+            local alias = launcher.resolveAlias(query)
+            assert.are.equal("com.tinyspeck.slackmacgap", alias.bundleID)
+        end
+    end)
+
+    it("does not steal i or iTerm-adjacent single letters for other apps", function()
+        assert.is_nil(launcher.resolveAlias("i"))
+    end)
+
+    it("puts Chrome first for c even when Chess exists", function()
+        local ranked = launcher.rankApps(apps, "c")
         assert.are.equal("Google Chrome", ranked[1].name)
         assert.are.equal(1000, ranked[1].score)
     end)
 
-    it("puts iTerm first for te and hides Terminal", function()
-        local ranked = launcher.rankApps(apps, "te")
+    it("puts iTerm first for t and hides Terminal", function()
+        local ranked = launcher.rankApps(apps, "t")
         assert.are.equal("iTerm", ranked[1].name)
         for _, item in ipairs(ranked) do
             assert.are_not.equal("com.apple.Terminal", item.bundleID)
@@ -57,13 +74,21 @@ describe("App launcher", function()
         assert.are.equal("Terminal", ranked[1].name)
     end)
 
-    it("shows pinned Chrome, iTerm, and Spotlight when the query is empty", function()
+    it("puts Slack first for s instead of Safari or Spotlight", function()
+        local ranked = launcher.rankApps(apps, "s")
+        assert.are.equal("Slack", ranked[1].name)
+        assert.are.equal(1000, ranked[1].score)
+        assert.are_not.equal("spotlight", ranked[1].action)
+    end)
+
+    it("shows pinned Chrome, iTerm, Slack, and Spotlight when the query is empty", function()
         local ranked = launcher.rankApps(apps, "")
-        assert.are.equal(3, #ranked)
+        assert.are.equal(4, #ranked)
         assert.are.equal("Google Chrome", ranked[1].name)
         assert.are.equal("iTerm", ranked[2].name)
-        assert.are.equal("Spotlight", ranked[3].name)
-        assert.are.equal("spotlight", ranked[3].action)
+        assert.are.equal("Slack", ranked[3].name)
+        assert.are.equal("Spotlight", ranked[4].name)
+        assert.are.equal("spotlight", ranked[4].action)
     end)
 
     it("maps sp to Spotlight", function()
