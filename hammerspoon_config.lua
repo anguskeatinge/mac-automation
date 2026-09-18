@@ -1,5 +1,7 @@
 -- ~/.hammerspoon/init.lua
 hs.console.clearConsole()
+hs.allowAppleScript(true)
+require("hs.ipc")
 hs.alert.show("Hammerspoon config reloaded")
 
 -- hotkeys
@@ -9,6 +11,10 @@ hs.hotkey.bind({"cmd", "alt", "ctrl"}, "T", devLayout.run)
 -- initialize window manager
 windowManager = require("angus_scripts.window_manager")
 windowManager.bindHotkeys()
+
+-- Cmd+Space app launcher: ch → Chrome, te → iTerm
+appLauncher = require("angus_scripts.app_launcher")
+appLauncher.start()
 
 slackKeyAppWatcher = require("angus_scripts.slack_page_up_down")
 
