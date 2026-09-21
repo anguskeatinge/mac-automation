@@ -65,6 +65,23 @@ Native `hs.chooser` launcher (replaces Spotlight on Cmd+Space):
 - Type to fuzzy-find installed apps
 - Spotlight itself is Opt+Space (see install step 5)
 
+#### TODO: glass overlay (paused)
+
+Paused mid-rebuild. Do **not** put a custom webview on Cmd+Space until this is redesigned.
+
+Where we got to:
+- Chooser is the reliable default (`M.uiMode = "chooser"` in `app_launcher.lua`)
+- A solid step-1 overlay scaffold exists under `angus_scripts/launcher/` but must stay off the main hotkey
+- Full-screen webview on Cmd+Space locked the machine (ate all input; had to restart)
+- Glass blur/style from the earlier fancy UI is still the goal eventually
+
+Next attempt should:
+1. Keep Cmd+Space on chooser
+2. Try the panel on a **different** hotkey first (e.g. Cmd+Opt+Space)
+3. Use a **card-sized** window only — never a full-screen click-catcher
+4. Add a force-kill dismiss that works even if JS/bridge is dead
+5. Layer glass/icons only after open/close/launch is proven safe
+
 ## Menu Bar Stats
 
 System stats displayed in separate menu bar items:

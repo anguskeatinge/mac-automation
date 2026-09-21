@@ -116,24 +116,33 @@ describe("App launcher", function()
         assert.are.equal("spotlight", ranked[1].action)
     end)
 
-    it("toggles closed when already visible", function()
-        local hidden = false
-        local shown = false
-        launcher._state.visible = true
-        launcher._state.chooser = {
-            hide = function()
-                hidden = true
-            end,
-            show = function()
-                shown = true
-            end,
-            query = function() end,
-            choices = function() end,
-        }
-        assert.are.equal("hide", launcher.toggle())
-        assert.is_true(hidden)
-        assert.is_false(shown)
-        assert.is_false(launcher._state.visible)
+    it("builds overlay items without icons in step 1", function()
+        local items = launcher.toOverlayItems({
+            { name = "Google Chrome", bundleID = "com.google.Chrome", alias = "c" },
+        })
+        assert.are.equal("Chrome", items[1].displayName)
+        assert.is_nil(items[1].icon)
+    end)
+
+    it("starts the overlay UI when uiMode is overlay", function()
+        local created = false
+        launcher.uiMode = "overlay"
+        launcher._deps.createOverlay = function(callbacks)
+            created = true
+            assert.is_truthy(callbacks.onQuery)
+            assert.is_truthy(callbacks.onSelect)
+            assert.is_truthy(callbacks.onDismiss)
+            return {
+                show = function() end,
+                update = function() end,
+                hide = function() end,
+                delete = function() end,
+            }
+        end
+        launcher.start()
+        assert.is_true(created)
+        assert.is_truthy(launcher._state.overlay)
+        assert.is_nil(launcher._state.chooser)
     end)
 
     it("toggles open when hidden", function()

@@ -1,9 +1,15 @@
--- Minimal Cmd+Space app launcher
+-- Cmd+Space app launcher
 -- Hard aliases beat fuzzy name matching so "t" / "te" is always iTerm, never Terminal.
+-- uiMode: "chooser" = proven native UI; "overlay" = custom panel (built incrementally).
 
 local hs = hs or require("tests.mocks.hs_mock")
+local overlayUI = require("angus_scripts.launcher.ui")
 
 local M = {}
+
+-- Step 1 overlay blocked the whole screen and could not be dismissed.
+-- Stay on native chooser until the custom panel is safe.
+M.uiMode = "chooser"
 
 -- Typing any prefix of a stem resolves to that app (c/ch/chrome, t/term/iterm, s/slack).
 -- minPrefix avoids collisions: "s" is Slack, Spotlight starts at "sp".
@@ -40,6 +46,7 @@ M.appDirs = {
 
 M._state = {
     chooser = nil,
+    overlay = nil,
     hotkey = nil,
     tap = nil,
     watchers = {},
@@ -47,46 +54,65 @@ M._state = {
     visible = false,
     ignoreNextHotkey = false,
     emptyChoices = nil,
+    lastItems = nil,
+    restoreApp = nil,
     iconCache = {},
 }
 
-M._deps = {
-    imageFromAppBundle = function(bundleID)
-        return hs.image.imageFromAppBundle(bundleID)
-    end,
-    launchOrFocusByBundleID = function(bundleID)
-        return hs.application.launchOrFocusByBundleID(bundleID)
-    end,
-    getApp = function(bundleID)
-        return hs.application.get(bundleID)
-    end,
-    activateApp = function(bundleID)
-        -- AppleScript activate is the reliable way to raise Chrome when it is already open.
-        local ok = hs.osascript.applescript(string.format('tell application id "%s" to activate', bundleID))
-        return ok and true or false
-    end,
-    openSpotlight = function()
-        -- Real Spotlight overlay, rebound to Opt+Space so it does not fight Cmd+Space.
-        hs.eventtap.keyStroke({ "alt" }, "space", 0)
-    end,
-    hideChooser = function(chooser)
-        if chooser and chooser.hide then
-            chooser:hide()
-        end
-    end,
-    pathWatcher = function(dir, fn)
-        if hs.pathwatcher then
-            return hs.pathwatcher.new(dir, fn)
-        end
-        return nil
-    end,
-    newEventTap = function(fn)
-        if hs.eventtap and hs.eventtap.event then
-            return hs.eventtap.new({ hs.eventtap.event.types.keyDown }, fn)
-        end
-        return nil
-    end,
-}
+local function defaultDeps()
+    return {
+        imageFromAppBundle = function(bundleID)
+            return hs.image.imageFromAppBundle(bundleID)
+        end,
+        launchOrFocusByBundleID = function(bundleID)
+            return hs.application.launchOrFocusByBundleID(bundleID)
+        end,
+        getApp = function(bundleID)
+            return hs.application.get(bundleID)
+        end,
+        activateApp = function(bundleID)
+            -- AppleScript activate is the reliable way to raise Chrome when it is already open.
+            local ok = hs.osascript.applescript(string.format('tell application id "%s" to activate', bundleID))
+            return ok and true or false
+        end,
+        openSpotlight = function()
+            -- Real Spotlight overlay, rebound to Opt+Space so it does not fight Cmd+Space.
+            hs.eventtap.keyStroke({ "alt" }, "space", 0)
+        end,
+        hideChooser = function(chooser)
+            if chooser and chooser.hide then
+                chooser:hide()
+            end
+        end,
+        createOverlay = function(callbacks)
+            return overlayUI.create(callbacks)
+        end,
+        frontmostApp = function()
+            if hs.application and hs.application.frontmostApplication then
+                return hs.application.frontmostApplication()
+            end
+            return nil
+        end,
+        pathWatcher = function(dir, fn)
+            if hs.pathwatcher then
+                return hs.pathwatcher.new(dir, fn)
+            end
+            return nil
+        end,
+        newEventTap = function(fn)
+            if hs.eventtap and hs.eventtap.event then
+                return hs.eventtap.new({ hs.eventtap.event.types.keyDown }, fn)
+            end
+            return nil
+        end,
+    }
+end
+
+M._deps = defaultDeps()
+
+function M.usingOverlay()
+    return M.uiMode == "overlay"
+end
 
 function M.normalizeQuery(query)
     return (query or ""):lower():gsub("^%s+", ""):gsub("%s+$", "")
@@ -287,6 +313,46 @@ function M.toChoices(ranked)
     return choices
 end
 
+function M.displayName(name)
+    if name == "Google Chrome" then
+        return "Chrome"
+    end
+    return name
+end
+
+function M.toOverlayItems(ranked)
+    local items = {}
+    for _, item in ipairs(ranked or {}) do
+        table.insert(items, {
+            name = item.name,
+            displayName = M.displayName(item.name),
+            alias = item.alias,
+            bundleID = item.bundleID,
+            action = item.action,
+        })
+    end
+    return items
+end
+
+function M.overlayState(query, resetQuery)
+    local ranked = M.rankApps(M._state.apps, query)
+    -- Keep the first paint light while proving the panel.
+    if #ranked > 12 then
+        local trimmed = {}
+        for i = 1, 12 do
+            trimmed[i] = ranked[i]
+        end
+        ranked = trimmed
+    end
+    local items = M.toOverlayItems(ranked)
+    M._state.lastItems = items
+    return {
+        query = query or "",
+        items = items,
+        resetQuery = resetQuery and true or false,
+    }
+end
+
 function M.appDirsToWatch()
     local unpack = table.unpack or unpack
     local dirs = { unpack(M.appDirs) }
@@ -326,7 +392,7 @@ function M.isCmdSpace(event)
 end
 
 function M.openSpotlight()
-    M._deps.hideChooser(M._state.chooser)
+    M.hide()
     return M._deps.openSpotlight()
 end
 
@@ -385,15 +451,45 @@ local function refreshChoices(query)
     M._state.chooser:choices(M.toChoices(M.rankApps(M._state.apps, query)))
 end
 
+function M.onQuery(query)
+    if not M._state.overlay or not M._state.overlay.update then
+        return
+    end
+    M._state.overlay:update(M.overlayState(query, false))
+end
+
+function M.onSelectIndex(index)
+    local item = (M._state.lastItems or {})[index]
+    M.hide()
+    if not item then
+        return false
+    end
+    return M.runChoice(item)
+end
+
 function M.hide()
     M._state.visible = false
+    local previous = M._state.restoreApp
+    M._state.restoreApp = nil
+    if M._state.overlay and M._state.overlay.hide then
+        M._state.overlay:hide()
+    end
     if M._state.chooser then
         M._state.chooser:hide()
+    end
+    if previous and previous.activate then
+        previous:activate()
     end
     return "hide"
 end
 
 function M.show()
+    if M._state.overlay then
+        M._state.restoreApp = M._deps.frontmostApp and M._deps.frontmostApp() or nil
+        M._state.visible = true
+        M._state.overlay:show(M.overlayState("", true))
+        return "show"
+    end
     if not M._state.chooser then
         return "show"
     end
@@ -428,7 +524,7 @@ function M.onCmdSpaceEvent(event)
     if not M._state.visible or not M.isCmdSpace(event) then
         return false
     end
-    -- Chooser can swallow the Hammerspoon hotkey. Consume Cmd+Space and close.
+    -- Panel can swallow the Hammerspoon hotkey. Consume Cmd+Space and close.
     M._state.ignoreNextHotkey = true
     M.hide()
     if hs.timer then
@@ -440,32 +536,43 @@ function M.onCmdSpaceEvent(event)
 end
 
 function M.start()
-    if M._state.chooser then
+    if M._state.chooser or M._state.overlay then
         return M
     end
 
     M._state.iconCache = {}
-    M._state.emptyChoices = M.toChoices(M.rankApps(nil, ""))
-    M._state.chooser = hs.chooser.new(function(choice)
-        M._state.visible = false
-        if not choice then
-            return
-        end
-        M.runChoice(choice)
-    end)
 
-    M._state.chooser:placeholderText("c chrome · t iTerm · s Slack · sp Spotlight")
-    M._state.chooser:searchSubText(false)
-    M._state.chooser:rows(6)
-    M._state.chooser:width(24)
-    M._state.chooser:choices(M._state.emptyChoices)
-    M._state.chooser:queryChangedCallback(function(query)
-        refreshChoices(query)
-    end)
-    if M._state.chooser.hideCallback then
-        M._state.chooser:hideCallback(function()
+    if M.usingOverlay() then
+        M._state.overlay = M._deps.createOverlay({
+            onQuery = M.onQuery,
+            onSelect = M.onSelectIndex,
+            onDismiss = function()
+                M.hide()
+            end,
+        })
+    else
+        M._state.emptyChoices = M.toChoices(M.rankApps(nil, ""))
+        M._state.chooser = hs.chooser.new(function(choice)
             M._state.visible = false
+            if not choice then
+                return
+            end
+            M.runChoice(choice)
         end)
+
+        M._state.chooser:placeholderText("c chrome · t iTerm · s Slack · sp Spotlight")
+        M._state.chooser:searchSubText(false)
+        M._state.chooser:rows(6)
+        M._state.chooser:width(24)
+        M._state.chooser:choices(M._state.emptyChoices)
+        M._state.chooser:queryChangedCallback(function(query)
+            refreshChoices(query)
+        end)
+        if M._state.chooser.hideCallback then
+            M._state.chooser:hideCallback(function()
+                M._state.visible = false
+            end)
+        end
     end
 
     M._state.hotkey = hs.hotkey.bind({ "cmd" }, "space", M.onHotkey)
@@ -518,19 +625,26 @@ function M.stop()
     if M._state.chooser and M._state.chooser.delete then
         M._state.chooser:delete()
     end
+    if M._state.overlay and M._state.overlay.delete then
+        M._state.overlay:delete()
+    end
     M._state.hotkey = nil
     M._state.tap = nil
     M._state.watchers = {}
     M._state.chooser = nil
+    M._state.overlay = nil
     M._state.apps = nil
     M._state.visible = false
     M._state.ignoreNextHotkey = false
     M._state.emptyChoices = nil
+    M._state.lastItems = nil
+    M._state.restoreApp = nil
     M._state.iconCache = {}
 end
 
 function M.reset()
     M.stop()
+    M.uiMode = "chooser"
     M._deps = {
         imageFromAppBundle = function()
             return nil
@@ -549,6 +663,17 @@ function M.reset()
         end,
         hideChooser = function()
             return true
+        end,
+        createOverlay = function()
+            return {
+                show = function() end,
+                update = function() end,
+                hide = function() end,
+                delete = function() end,
+            }
+        end,
+        frontmostApp = function()
+            return nil
         end,
         pathWatcher = function()
             return nil
