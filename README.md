@@ -47,12 +47,23 @@ package.path = package.path .. ";" .. home .. "/mac-automation/?/init.lua"
 require("hammerspoon_config")
 ```
 4. Reload Hammerspoon config
+5. Rebind Spotlight away from Cmd+Space (required so it does not open under the launcher):
+   - System Settings → Keyboard → Keyboard Shortcuts → Spotlight
+   - Set **Show Spotlight search** to **⌥Space** (or turn it off)
+   - Real Spotlight remains available from the launcher (`sp`) or ⌥Space
 
 ## Usage
 
 Edit `hammerspoon_config.lua` to customize hotkeys and behavior.
 
 Adjust screen names in `dev_layout.lua` to match your setup.
+
+### App Launcher (Cmd+Space)
+
+Native `hs.chooser` launcher (replaces Spotlight on Cmd+Space):
+- Empty query pins: Chrome (`c`), iTerm (`t`), Slack (`s`), Spotlight (`sp`)
+- Type to fuzzy-find installed apps
+- Spotlight itself is Opt+Space (see install step 5)
 
 ## Menu Bar Stats
 
