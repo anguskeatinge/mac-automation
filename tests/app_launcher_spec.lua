@@ -176,4 +176,50 @@ describe("App launcher", function()
         assert.is_true(launcher.onCmdSpaceEvent(event))
         assert.is_false(launcher._state.visible)
     end)
+
+    it("does not install a global keyDown tap at start", function()
+        local taps = 0
+        launcher._deps.newEventTap = function()
+            taps = taps + 1
+            return {
+                start = function() end,
+                stop = function() end,
+            }
+        end
+        hs.chooser = {
+            new = function()
+                local chooser = {}
+                function chooser:placeholderText() return self end
+                function chooser:searchSubText() return self end
+                function chooser:rows() return self end
+                function chooser:width() return self end
+                function chooser:choices() return self end
+                function chooser:queryChangedCallback() return self end
+                function chooser:hideCallback() return self end
+                function chooser:query() return self end
+                function chooser:show() return self end
+                function chooser:hide() return self end
+                function chooser:delete() return self end
+                return chooser
+            end,
+        }
+        launcher.start()
+        assert.are.equal(0, taps)
+        assert.is_true(#hs_mock.getHotkeys() >= 1)
+    end)
+
+    it("enables a cmd-space dismiss modal only while the chooser is showing", function()
+        launcher._state.emptyChoices = {}
+        launcher._state.chooser = {
+            hide = function() end,
+            show = function() end,
+            query = function() end,
+            choices = function() end,
+        }
+        launcher.show()
+        assert.is_not_nil(launcher._state.dismissModal)
+        assert.is_true(launcher._state.dismissModal._entered)
+        launcher.hide()
+        assert.is_false(launcher._state.dismissModal._entered)
+    end)
 end)

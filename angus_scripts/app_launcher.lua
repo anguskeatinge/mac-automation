@@ -49,6 +49,7 @@ M._state = {
     overlay = nil,
     hotkey = nil,
     tap = nil,
+    dismissModal = nil,
     watchers = {},
     apps = nil,
     visible = false,
@@ -467,8 +468,57 @@ function M.onSelectIndex(index)
     return M.runChoice(item)
 end
 
+-- Cmd+Space to *open* the launcher is the always-on hotkey. This extra chord
+-- only exists because the chooser/overlay can swallow that hotkey while it has
+-- focus. Bind Cmd+Space itself (modal), not every keyDown.
+function M.enterDismissChord()
+    if M._state.dismissModal then
+        if M._state.dismissModal.enter then
+            M._state.dismissModal:enter()
+        end
+        return
+    end
+    if hs.hotkey and hs.hotkey.modal and hs.hotkey.modal.new then
+        local modal = hs.hotkey.modal.new()
+        modal:bind({ "cmd" }, "space", function()
+            M.onCmdSpaceEvent({
+                getKeyCode = function()
+                    return M.spaceKeyCode()
+                end,
+                getFlags = function()
+                    return { cmd = true }
+                end,
+            })
+        end)
+        M._state.dismissModal = modal
+        modal:enter()
+        return
+    end
+    if M._state.tap then
+        if M._state.tap.start then
+            M._state.tap:start()
+        end
+        return
+    end
+    local tap = M._deps.newEventTap(M.onCmdSpaceEvent)
+    if tap and tap.start then
+        tap:start()
+        M._state.tap = tap
+    end
+end
+
+function M.exitDismissChord()
+    if M._state.dismissModal and M._state.dismissModal.exit then
+        M._state.dismissModal:exit()
+    end
+    if M._state.tap and M._state.tap.stop then
+        M._state.tap:stop()
+    end
+end
+
 function M.hide()
     M._state.visible = false
+    M.exitDismissChord()
     local previous = M._state.restoreApp
     M._state.restoreApp = nil
     if M._state.overlay and M._state.overlay.hide then
@@ -488,6 +538,7 @@ function M.show()
         M._state.restoreApp = M._deps.frontmostApp and M._deps.frontmostApp() or nil
         M._state.visible = true
         M._state.overlay:show(M.overlayState("", true))
+        M.enterDismissChord()
         return "show"
     end
     if not M._state.chooser then
@@ -502,6 +553,7 @@ function M.show()
     end
     M._state.visible = true
     M._state.chooser:show()
+    M.enterDismissChord()
     return "show"
 end
 
@@ -554,6 +606,7 @@ function M.start()
         M._state.emptyChoices = M.toChoices(M.rankApps(nil, ""))
         M._state.chooser = hs.chooser.new(function(choice)
             M._state.visible = false
+            M.exitDismissChord()
             if not choice then
                 return
             end
@@ -571,17 +624,12 @@ function M.start()
         if M._state.chooser.hideCallback then
             M._state.chooser:hideCallback(function()
                 M._state.visible = false
+                M.exitDismissChord()
             end)
         end
     end
 
     M._state.hotkey = hs.hotkey.bind({ "cmd" }, "space", M.onHotkey)
-
-    local tap = M._deps.newEventTap(M.onCmdSpaceEvent)
-    if tap and tap.start then
-        tap:start()
-        M._state.tap = tap
-    end
 
     -- Warm the app list after the window can already open.
     if hs.timer then
@@ -614,9 +662,11 @@ function M.stop()
     if M._state.hotkey and M._state.hotkey.delete then
         M._state.hotkey:delete()
     end
-    if M._state.tap and M._state.tap.stop then
-        M._state.tap:stop()
+    M.exitDismissChord()
+    if M._state.dismissModal and M._state.dismissModal.delete then
+        M._state.dismissModal:delete()
     end
+    M._state.dismissModal = nil
     for _, watcher in ipairs(M._state.watchers or {}) do
         if watcher.stop then
             watcher:stop()
@@ -630,6 +680,7 @@ function M.stop()
     end
     M._state.hotkey = nil
     M._state.tap = nil
+    M._state.dismissModal = nil
     M._state.watchers = {}
     M._state.chooser = nil
     M._state.overlay = nil

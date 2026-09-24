@@ -185,6 +185,31 @@ function M.hotkey.bind(modifiers, key, fn)
     })
 end
 
+M.hotkey.modal = {}
+
+function M.hotkey.modal.new()
+    local modal = {
+        _entered = false,
+        _bindings = {},
+    }
+    function modal:bind(modifiers, key, fn)
+        table.insert(self._bindings, { modifiers = modifiers, key = key, fn = fn })
+        return self
+    end
+    function modal:enter()
+        self._entered = true
+        return self
+    end
+    function modal:exit()
+        self._entered = false
+        return self
+    end
+    function modal:delete()
+        self._deleted = true
+    end
+    return modal
+end
+
 -- Get recorded hotkeys (for assertions)
 function M.getHotkeys()
     return M._state.hotkeys

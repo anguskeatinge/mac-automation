@@ -89,7 +89,7 @@ en1   1500  <Link#5>      bb:cc:dd:ee:ff:00 234567     0 1234567890   345678    
 
         it("sets initial title", function()
             network.create()
-            assert.are.equal("\u{2193}-- \u{2191}--", network._state.menubar:title())  -- ↓-- ↑--
+            assert.are.equal("\u{2193}--", network._state.menubar:title())  -- ↓--
         end)
     end)
 
@@ -119,10 +119,38 @@ en0   1500  <Link#4>      aa:bb:cc:dd:ee:ff 234567     0 %d   345678     0  %d  
             network.refresh()  -- First call sets baseline
             local down, up = network.refresh()  -- Second call calculates delta
 
-            -- Verify title has arrow format
+            -- Compact title is download only
             local title = network._state.menubar:title()
             assert.truthy(title:match("\u{2193}"))  -- ↓
-            assert.truthy(title:match("\u{2191}"))  -- ↑
+        end)
+
+        it("applies netstat from a later fetchNetstat callback", function()
+            local pending
+            network._deps.fetchNetstat = function(callback)
+                pending = callback
+            end
+            network.create()
+            assert.is_nil(network.refresh())
+            pending([[
+Name  Mtu   Network       Address            Ipkts Ierrs     Ibytes    Opkts Oerrs     Obytes  Coll
+en0   1500  <Link#4>      aa:bb:cc:dd:ee:ff 234567     0 1000   345678     0  500     0
+]])
+            network.refresh()
+            pending([[
+Name  Mtu   Network       Address            Ipkts Ierrs     Ibytes    Opkts Oerrs     Obytes  Coll
+en0   1500  <Link#4>      aa:bb:cc:dd:ee:ff 234567     0 2000   345678     0  900     0
+]])
+            local title = network._state.menubar:title()
+            assert.truthy(title:match("\u{2193}"))
+        end)
+
+        it("skips a tick while a netstat task is already in flight", function()
+            local called = false
+            network._state.netstatTask = {}
+            network.taskFetchNetstat(function()
+                called = true
+            end)
+            assert.is_false(called)
         end)
     end)
 

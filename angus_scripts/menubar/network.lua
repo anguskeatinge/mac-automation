@@ -7,7 +7,14 @@ local utils = require("angus_scripts.menubar.utils")
 -- Injectable dependencies (for testing)
 M._deps = {
     executeCommand = function(cmd) return hs.execute(cmd) end,
-    getTime = function() return os.time() end,
+    getTime = function()
+        if hs.timer and hs.timer.secondsSinceEpoch then
+            return hs.timer.secondsSinceEpoch()
+        end
+        return os.time()
+    end,
+    -- Tests keep this sync. create() swaps in taskFetchNetstat under real Hammerspoon.
+    fetchNetstat = nil,
 }
 
 -- Constants
@@ -19,7 +26,34 @@ M._state = {
     prevNetBytes = nil,
     prevNetTime = nil,
     history = {},  -- Rolling history: {bytesIn, bytesOut, time}
+    netstatTask = nil,
 }
+
+-- Sync path used by tests (and as a fallback if hs.task is missing).
+function M.syncFetchNetstat(callback)
+    callback(M._deps.executeCommand("netstat -ib") or "")
+end
+
+-- Run netstat in a subprocess so the Hammerspoon Lua thread (and any event
+-- taps on it) stay free. Skip the tick if a previous sample is still running.
+function M.taskFetchNetstat(callback)
+    if M._state.netstatTask then
+        return
+    end
+    local task = hs.task.new("/usr/sbin/netstat", function(_, stdout)
+        M._state.netstatTask = nil
+        callback(stdout or "")
+    end, { "-ib" })
+    M._state.netstatTask = task
+    local started = true
+    if task.start then
+        started = task:start()
+    end
+    if not started then
+        M._state.netstatTask = nil
+        callback("")
+    end
+end
 
 -- Parse netstat -ib output to get bytes in/out for primary interface
 -- Checks en0, en1, en2 in order (covers most Mac configurations)
@@ -136,15 +170,18 @@ function M.create()
     M._state.menubar:setMenu(M.buildMenu)
     -- Keep extra reference to prevent GC
     M.menubar = M._state.menubar
+    if hs.task and hs.task.new then
+        M._deps.fetchNetstat = M.taskFetchNetstat
+    end
     return M._state.menubar
 end
 
--- Update title (called by refresh timer)
-function M.refresh()
-    if not M._state.menubar then return end
+function M.applyNetstatOutput(output)
+    if not M._state.menubar then
+        return
+    end
 
-    local netstatOutput = M._deps.executeCommand("netstat -ib")
-    local currNetBytes = M.parseNetstat(netstatOutput)
+    local currNetBytes = M.parseNetstat(output)
     local currTime = M._deps.getTime()
 
     local netDown, netUp = "--", "--"
@@ -174,8 +211,31 @@ function M.refresh()
     return netDown, netUp
 end
 
+-- Update title (called by refresh timer). fetchNetstat may be async; the
+-- return value is only present when the fetch invokes the callback inline.
+function M.refresh()
+    if not M._state.menubar then return end
+
+    local result = nil
+    local fetch = M._deps.fetchNetstat or M.syncFetchNetstat
+    fetch(function(output)
+        result = { M.applyNetstatOutput(output) }
+    end)
+    if result then
+        return result[1], result[2]
+    end
+end
+
 -- Cleanup
 function M.destroy()
+    if M._state.netstatTask then
+        if M._state.netstatTask.terminate then
+            pcall(function()
+                M._state.netstatTask:terminate()
+            end)
+        end
+        M._state.netstatTask = nil
+    end
     if M._state.menubar then
         M._state.menubar:delete()
         M._state.menubar = nil
@@ -192,6 +252,7 @@ function M.reset()
     M._deps = {
         executeCommand = function(cmd) return hs.execute(cmd) end,
         getTime = function() return os.time() end,
+        fetchNetstat = M.syncFetchNetstat,
     }
 end
 
